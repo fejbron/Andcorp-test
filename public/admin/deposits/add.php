@@ -35,6 +35,50 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     
     $errors = $validator->getErrors();
     
+    // Handle deposit slip upload
+    $depositSlipPath = null;
+    if (isset($_FILES['deposit_slip']) && $_FILES['deposit_slip']['error'] === UPLOAD_ERR_OK) {
+        $file = $_FILES['deposit_slip'];
+        
+        // Validate file
+        $allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+        $maxSize = 5 * 1024 * 1024; // 5MB
+        $validation = Security::validateFileUpload($file, $allowedMimeTypes, $maxSize);
+        
+        if ($validation['valid']) {
+            $uploadDir = __DIR__ . '/../../uploads/deposit_slips';
+            
+            // Create directory if it doesn't exist
+            if (!is_dir($uploadDir)) {
+                if (!mkdir($uploadDir, 0755, true)) {
+                    $errors['deposit_slip'] = 'Failed to create upload directory. Please contact administrator.';
+                }
+            }
+            
+            if (empty($errors['deposit_slip'])) {
+                // Generate secure filename
+                $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+                $secureFilename = bin2hex(random_bytes(16)) . '.' . $extension;
+                $uploadPath = $uploadDir . '/' . $secureFilename;
+                // Store just the filename - the view will construct the full path
+                $relativePath = $secureFilename;
+                
+                if (move_uploaded_file($file['tmp_name'], $uploadPath)) {
+                    // Set proper file permissions
+                    @chmod($uploadPath, 0644);
+                    $depositSlipPath = $relativePath;
+                } else {
+                    $errors['deposit_slip'] = 'Failed to upload deposit slip. Please try again.';
+                }
+            }
+        } else {
+            $errors['deposit_slip'] = $validation['error'];
+        }
+    } elseif (isset($_FILES['deposit_slip']) && $_FILES['deposit_slip']['error'] !== UPLOAD_ERR_NO_FILE) {
+        // File upload error (but not "no file" error)
+        $errors['deposit_slip'] = 'Error uploading deposit slip. Please try again.';
+    }
+    
     if (empty($errors)) {
         try {
             $depositModel = new Deposit();
@@ -50,7 +94,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'reference_number' => $_POST['reference_number'] ?? null,
                 'transaction_date' => $_POST['transaction_date'],
                 'transaction_time' => $_POST['transaction_time'],
-                'deposit_slip' => null, // File upload not implemented yet
+                'deposit_slip' => $depositSlipPath,
                 'status' => $_POST['status'] ?? 'verified', // Admin adds deposits as verified by default
                 'notes' => $_POST['notes'] ?? null,
                 'created_by' => Auth::userId()
@@ -62,7 +106,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             Auth::logOrderActivity(Auth::userId(), $orderId, 'deposit_added', 'Deposit of ' . formatCurrency($_POST['amount']) . ' added');
             
             clearOld(); // Clear form data after successful submission
-            setSuccess('Deposit added successfully!');
+            setSuccess('Deposit added successfully! Financial summary has been updated.');
             redirect(url('admin/orders/edit.php?id=' . $orderId));
         } catch (Exception $e) {
             $errors['general'] = 'An error occurred while adding the deposit. Please try again.';
@@ -141,7 +185,7 @@ $title = "Add Deposit";
                         <h5 class="mb-0"><i class="bi bi-plus-circle"></i> Deposit Details</h5>
                     </div>
                     <div class="card-body">
-                        <form method="POST" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']) . '?order_id=' . $orderId; ?>">
+                        <form method="POST" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']) . '?order_id=' . $orderId; ?>" enctype="multipart/form-data">
                             <?php echo Security::csrfField(); ?>
                             
                             <div class="row">
@@ -227,6 +271,17 @@ $title = "Add Deposit";
                                     <option value="pending" <?php echo old('status') === 'pending' ? 'selected' : ''; ?>>Pending</option>
                                 </select>
                                 <div class="form-text">Select "Verified" if you've confirmed this deposit</div>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="deposit_slip" class="form-label">Deposit Slip (Optional)</label>
+                                <input type="file" class="form-control <?php echo hasError('deposit_slip') ? 'is-invalid' : ''; ?>" 
+                                       id="deposit_slip" name="deposit_slip" 
+                                       accept="image/jpeg,image/jpg,image/png,application/pdf">
+                                <?php if (error('deposit_slip')): ?>
+                                    <div class="invalid-feedback d-block"><?php echo error('deposit_slip'); ?></div>
+                                <?php endif; ?>
+                                <div class="form-text">Upload a photo or PDF of the deposit slip. Max size: 5MB. Accepted formats: JPG, PNG, PDF</div>
                             </div>
 
                             <div class="mb-3">

@@ -142,6 +142,31 @@ class Deposit {
     }
     
     /**
+     * Update deposit status
+     */
+    public function updateStatus($id, $status) {
+        $allowedStatuses = ['pending', 'verified', 'rejected'];
+        if (!in_array($status, $allowedStatuses, true)) {
+            throw new Exception('Invalid deposit status');
+        }
+        
+        $sql = "UPDATE deposits SET status = :status WHERE id = :id";
+        $stmt = $this->db->prepare($sql);
+        $result = $stmt->execute([
+            ':id' => Security::sanitizeInt($id),
+            ':status' => $status
+        ]);
+        
+        // Update order's total_deposits
+        $deposit = $this->findById($id);
+        if ($deposit) {
+            $this->updateOrderTotalDeposits($deposit['order_id']);
+        }
+        
+        return $result;
+    }
+    
+    /**
      * Delete a deposit
      */
     public function delete($id) {
@@ -289,21 +314,32 @@ class Deposit {
     private function updateOrderTotalDeposits($orderId) {
         $orderId = Security::sanitizeInt($orderId);
         
-        $sql = "UPDATE orders o SET
-                    total_deposits = (
-                        SELECT COALESCE(SUM(amount), 0)
-                        FROM deposits
-                        WHERE order_id = ? AND status = 'verified'
-                    ),
-                    balance_due = total_cost - (
-                        SELECT COALESCE(SUM(amount), 0)
-                        FROM deposits
-                        WHERE order_id = ? AND status = 'verified'
-                    )
-                WHERE o.id = ?";
-        
-        $stmt = $this->db->prepare($sql);
-        return $stmt->execute([$orderId, $orderId, $orderId]);
+        try {
+            $sql = "UPDATE orders o SET
+                        total_deposits = (
+                            SELECT COALESCE(SUM(amount), 0)
+                            FROM deposits
+                            WHERE order_id = ? AND status = 'verified'
+                        ),
+                        balance_due = GREATEST(0, total_cost - (
+                            SELECT COALESCE(SUM(amount), 0)
+                            FROM deposits
+                            WHERE order_id = ? AND status = 'verified'
+                        ))
+                    WHERE o.id = ?";
+            
+            $stmt = $this->db->prepare($sql);
+            $result = $stmt->execute([$orderId, $orderId, $orderId]);
+            
+            if (!$result) {
+                error_log("Failed to update order total deposits for order ID: $orderId");
+            }
+            
+            return $result;
+        } catch (Exception $e) {
+            error_log("Error updating order total deposits: " . $e->getMessage());
+            return false;
+        }
     }
     
     /**

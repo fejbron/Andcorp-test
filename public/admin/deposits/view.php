@@ -32,17 +32,17 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
         switch ($_POST['action']) {
             case 'verify':
                 $depositModel->verify($depositId, Auth::userId());
-                setSuccess('Deposit verified successfully!');
+                setSuccess('Deposit verified successfully! Financial summary has been updated.');
                 break;
                 
             case 'reject':
                 $depositModel->updateStatus($depositId, 'rejected');
-                setSuccess('Deposit rejected.');
+                setSuccess('Deposit rejected. Financial summary has been updated.');
                 break;
                 
             case 'pending':
                 $depositModel->updateStatus($depositId, 'pending');
-                setSuccess('Deposit status updated to pending.');
+                setSuccess('Deposit status updated to pending. Financial summary has been updated.');
                 break;
         }
         
@@ -55,7 +55,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     }
 }
 
-// Get related order
+// Get related order (refresh to get updated totals)
 $orderModel = new Order();
 $order = $orderModel->findById($deposit['order_id']);
 
@@ -205,7 +205,7 @@ $pageTitle = "Deposit Details #" . $depositId;
                                     <div class="col-md-12">
                                         <label class="form-label text-muted small">Deposit Slip</label>
                                         <div>
-                                            <a href="<?php echo url('uploads/deposits/' . $deposit['deposit_slip']); ?>" 
+                                            <a href="<?php echo url('uploads/deposit_slips/' . $deposit['deposit_slip']); ?>" 
                                                class="btn btn-outline-primary" target="_blank">
                                                 <i class="bi bi-file-earmark-pdf"></i> View Deposit Slip
                                             </a>
