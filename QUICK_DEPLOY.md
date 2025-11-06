@@ -1,97 +1,140 @@
-# ⚡ Quick Deployment Guide for Namecheap
+# Quick Deployment Guide for Namecheap
 
-## 🚀 5-Minute Setup
+## Quick Steps
 
-### Step 1: Prepare Files (Run Once)
+### 1. Prepare Deployment Package
 ```bash
-php prepare_deployment.php
+./deploy.sh
 ```
 
-This creates:
-- `deployment_package/` - Clean files ready for upload
-- `andcorp_deployment_YYYY-MM-DD.zip` - ZIP file for easy upload
+This creates a `deploy_package/` directory with all files ready for upload.
 
----
+### 2. Update Database Configuration
 
-### Step 2: Upload to Namecheap
-
-**Option A: Upload ZIP (Easiest)**
-1. Login to cPanel → File Manager
-2. Upload `andcorp_deployment_YYYY-MM-DD.zip`
-3. Extract in `public_html/`
-4. Move contents to root if needed
-
-**Option B: Upload via FTP**
-1. Use FileZilla
-2. Connect to `ftp.yourdomain.com`
-3. Upload all files from `deployment_package/`
-4. Upload `public/` contents to `public_html/`
-
----
-
-### Step 3: Database Setup
-
-1. **cPanel → MySQL Databases**
-   - Create database: `andcorp_db`
-   - Create user: `andcorp_user`
-   - Add user to database with ALL PRIVILEGES
-
-2. **cPanel → phpMyAdmin**
-   - Select your database
-   - Import `database/schema.sql`
-   - Import `database/deposits_tracking.sql`
-   - Import `database/quote_requests.sql`
-
----
-
-### Step 4: Configure Database
-
-Edit `app/Database.php`:
+Edit `deploy_package/config/database.php` with your production credentials:
 ```php
-private static $database = 'username_andcorp_db';
-private static $username = 'username_andcorp_user';
-private static $password = 'YOUR_PASSWORD';
+'host' => 'localhost',
+'dbname' => 'your_cpanel_db_name',      // e.g., 'cpses_username_andcorp'
+'username' => 'your_cpanel_db_user',    // e.g., 'cpses_username_dbuser'
+'password' => 'your_db_password',
 ```
 
----
+### 3. Upload to Server
 
-### Step 5: Set Permissions
+**Option A: Using cPanel File Manager**
+1. Log into cPanel
+2. Go to File Manager
+3. Navigate to `public_html` or your domain root
+4. Upload `Andcorp-test_deploy.zip`
+5. Extract the ZIP file
 
-In cPanel File Manager:
-- Folders: `755`
-- Files: `644`
-- `public/uploads/`: `755` (important!)
+**Option B: Using FTP/SFTP**
+1. Connect using FTP credentials from cPanel
+2. Upload all files from `deploy_package/` directory
+3. Maintain directory structure
 
----
+### 4. Set File Permissions
 
-### Step 6: Test
+In cPanel File Manager or via SSH:
+```bash
+# Folders
+find . -type d -exec chmod 755 {} \;
 
-1. Visit: `https://yourdomain.com/`
-2. Register account
-3. Login
-4. Test admin panel
+# Files
+find . -type f -exec chmod 644 {} \;
 
-**Done!** 🎉
+# Upload directories (make writable)
+chmod 755 uploads/
+chmod 755 uploads/cars/
+chmod 755 uploads/documents/
+chmod 755 uploads/deposit_slips/
+```
 
----
+### 5. Create Database
 
-## 🔧 Common Issues
+1. In cPanel, go to "MySQL Databases"
+2. Create database (e.g., `andcorp_db`)
+3. Create database user
+4. Assign user to database with ALL PRIVILEGES
+5. Note down credentials
 
-**White screen?**
-- Check `.htaccess` is uploaded
-- Check PHP error logs in cPanel
+### 6. Import Database
 
-**Database error?**
-- Verify credentials in `app/Database.php`
-- Check database user has privileges
+1. In cPanel, go to "phpMyAdmin"
+2. Select your database
+3. Click "Import"
+4. Upload `database/schema.sql`
+5. Click "Go"
 
-**Uploads not working?**
-- Set `public/uploads/` to 755
-- Check PHP upload limits
+### 7. Run Additional Migrations
 
----
+In phpMyAdmin, run these SQL files if needed:
+- `database/email_notification_settings.sql`
+- `database/add_evidence_of_delivery.sql`
+- `database/fix_status_enum.sql` (only if needed)
 
-## 📞 Need Help?
+### 8. Configure Document Root (Recommended)
 
-See `NAMECHEAP_DEPLOYMENT.md` for detailed instructions.
+**Option 1: Point Document Root to `public` folder**
+1. In cPanel, go to "Subdomains" or "Addon Domains"
+2. Edit your domain
+3. Set document root to: `/home/username/public_html/Andcorp-test/public`
+4. URLs will be: `https://app.andcorpautos.com/`
 
+**Option 2: Keep as is**
+- URLs will be: `https://app.andcorpautos.com/public/`
+- No configuration needed
+
+### 9. Test Application
+
+1. Visit your domain
+2. Test login
+3. Check all pages load
+4. Test file uploads
+5. Check error logs in cPanel
+
+### 10. Post-Deployment
+
+1. Remove debug files (if any):
+   ```bash
+   rm -f public/admin/debug_*.php
+   rm -f public/admin/check_*.php
+   ```
+
+2. Set up backups in cPanel
+
+3. Configure email settings in Admin Panel → Settings
+
+## Troubleshooting
+
+### URLs Not Working
+- Check `.htaccess` file exists in `public/` folder
+- Verify mod_rewrite is enabled
+- Check document root configuration
+
+### Database Connection Error
+- Verify credentials in `config/database.php`
+- Check database host (usually `localhost`)
+- Ensure database user has proper permissions
+
+### File Upload Not Working
+- Check `uploads/` folders exist and have 755 permissions
+- Verify PHP upload limits in cPanel
+
+### 404 Errors
+- Verify document root points to `public/` folder
+- Check `.htaccess` file is present
+- Review error logs in cPanel
+
+## Important Files
+
+- `config/database.php` - Database configuration (UPDATE THIS!)
+- `public/.htaccess` - URL rewriting and security
+- `database/schema.sql` - Database schema
+- `DEPLOYMENT.md` - Full deployment guide
+- `PRODUCTION_CHECKLIST.md` - Deployment checklist
+
+## Support
+
+For detailed instructions, see `DEPLOYMENT.md`
+For troubleshooting, check cPanel Error Log

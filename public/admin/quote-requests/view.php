@@ -4,33 +4,144 @@ Auth::requireStaff();
 
 $quoteRequestModel = new QuoteRequest();
 
-$requestId = Security::sanitizeInt($_GET['id'] ?? 0);
-if (!$requestId) {
-    redirect(url('../../admin/quote-requests.php'));
+// Get and validate ID from query string
+$rawId = $_GET['id'] ?? 0;
+$requestId = Security::sanitizeInt($rawId);
+
+// TEMPORARY DEBUG: Show on screen if ?debug=1 is in URL
+if (isset($_GET['debug']) && $_GET['debug'] == '1') {
+    echo '<pre style="background: #f0f0f0; padding: 20px; margin: 20px; border: 2px solid #333;">';
+    echo "<h3>DEBUG MODE - Quote Request View</h3>\n\n";
+    echo "Raw ID from GET: " . var_export($rawId, true) . "\n";
+    echo "Sanitized ID: " . var_export($requestId, true) . "\n\n";
 }
 
-$request = $quoteRequestModel->findById($requestId);
-if (!$request) {
-    setErrors(['general' => 'Quote request not found']);
-    redirect(url('../../admin/quote-requests.php'));
+// Debug logging
+error_log("Quote Request View - Raw ID from GET: " . var_export($rawId, true));
+error_log("Quote Request View - Sanitized ID: " . var_export($requestId, true));
+
+if (!$requestId || $requestId <= 0) {
+    if (isset($_GET['debug'])) {
+        echo "❌ FAILED: Invalid or missing ID\n";
+        echo "Raw: " . var_export($rawId, true) . "\n";
+        echo "Sanitized: " . var_export($requestId, true) . "\n";
+        echo "</pre>";
+        exit("Stopped in debug mode");
+    }
+    error_log("Quote Request View - Invalid or missing ID. Raw: " . var_export($rawId, true) . ", Sanitized: " . var_export($requestId, true));
+    setErrors(['general' => 'Invalid quote request ID.']);
+    redirect(url('admin/quote-requests.php'));
+}
+
+try {
+    // Log the ID being queried
+    error_log("Quote Request View - Attempting to find quote request with ID: " . $requestId);
+    
+    if (isset($_GET['debug'])) {
+        echo "✅ PASSED: ID validation\n\n";
+        echo "Calling QuoteRequest::findById({$requestId})...\n";
+    }
+    
+    $request = $quoteRequestModel->findById($requestId);
+    
+    if (isset($_GET['debug'])) {
+        echo "Result type: " . gettype($request) . "\n";
+        if ($request) {
+            echo "✅ findById() returned data\n";
+            echo "Request Number: " . ($request['request_number'] ?? 'N/A') . "\n";
+            echo "Status: " . ($request['status'] ?? 'N/A') . "\n";
+            echo "\nFull data:\n";
+            print_r($request);
+        } else {
+            echo "❌ findById() returned null/false\n";
+        }
+    }
+    
+    // Check if request was found (PDO fetch returns false if no row, we convert to null)
+    if ($request === null || $request === false || empty($request)) {
+        error_log("Quote Request View - Quote request not found for ID: " . $requestId . " (type: " . gettype($requestId) . ")");
+        
+        // Try to verify if any quote requests exist
+        try {
+            $db = Database::getInstance()->getConnection();
+            $checkStmt = $db->query("SELECT id, request_number FROM quote_requests ORDER BY id DESC LIMIT 5");
+            $existingIds = $checkStmt->fetchAll(PDO::FETCH_ASSOC);
+            error_log("Quote Request View - Existing quote request IDs: " . print_r($existingIds, true));
+            
+            if (isset($_GET['debug'])) {
+                echo "\nExisting quote request IDs in database:\n";
+                print_r($existingIds);
+                echo "</pre>";
+                exit("Stopped in debug mode - record not found");
+            }
+        } catch (Exception $checkEx) {
+            error_log("Quote Request View - Could not check existing IDs: " . $checkEx->getMessage());
+        }
+        
+        setErrors(['general' => 'Quote request not found. ID: ' . htmlspecialchars($requestId)]);
+        redirect(url('admin/quote-requests.php'));
+    } else {
+        error_log("Quote Request View - Successfully found quote request ID: " . $requestId . ", Request Number: " . ($request['request_number'] ?? 'N/A'));
+        
+        if (isset($_GET['debug'])) {
+            echo "\n✅ SUCCESS: Quote request found and loaded\n";
+            echo "Proceeding to display the page...\n";
+            echo "</pre>";
+            echo "<p><a href='?id={$requestId}'>Continue to view page (remove debug)</a></p>";
+            // Don't exit - let the page continue
+        }
+    }
+} catch (PDOException $e) {
+    error_log("Quote Request View - PDO Error fetching quote request ID {$requestId}: " . $e->getMessage());
+    error_log("Quote Request View - SQL State: " . $e->getCode());
+    error_log("Quote Request View - Error Info: " . print_r($e->errorInfo, true));
+    error_log("Quote Request View - SQL Query that failed: SELECT ... WHERE qr.id = :id");
+    
+    if (isset($_GET['debug'])) {
+        echo "❌ PDO Exception: " . htmlspecialchars($e->getMessage()) . "\n";
+        echo "SQL State: " . htmlspecialchars($e->getCode()) . "\n";
+        echo "Error Info: " . print_r($e->errorInfo, true) . "\n";
+        echo "</pre>";
+        exit("Stopped in debug mode - PDO error");
+    }
+    
+    setErrors(['general' => 'Database error: Unable to load quote request. Error: ' . htmlspecialchars($e->getMessage())]);
+    redirect(url('admin/quote-requests.php'));
+} catch (Exception $e) {
+    error_log("Quote Request View - Error fetching quote request ID {$requestId}: " . $e->getMessage());
+    error_log("Quote Request View - Stack trace: " . $e->getTraceAsString());
+    
+    if (isset($_GET['debug'])) {
+        echo "❌ Exception: " . htmlspecialchars($e->getMessage()) . "\n";
+        echo "Stack trace:\n" . htmlspecialchars($e->getTraceAsString()) . "\n";
+        echo "</pre>";
+        exit("Stopped in debug mode - exception");
+    }
+    
+    setErrors(['general' => 'An error occurred while loading the quote request. Please check the error logs.']);
+    redirect(url('admin/quote-requests.php'));
 }
 
 // Handle quote submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_quote'])) {
     // CSRF protection
     if (!isset($_POST['csrf_token']) || !Security::verifyToken($_POST['csrf_token'])) {
-        $errors['general'] = 'Invalid security token. Please try again.';
-        setErrors($errors);
-        header('Location: ' . $_SERVER['PHP_SELF'] . '?id=' . $requestId);
-        exit;
+        setErrors(['general' => 'Invalid security token. Please try again.']);
+        redirect(url('admin/quote-requests/view.php?id=' . $requestId));
     }
     
-    $validator = new Validator();
-    $validator->required('quoted_price', $_POST['quoted_price'] ?? '')
-              ->required('shipping_cost', $_POST['shipping_cost'] ?? '')
-              ->required('duty_estimate', $_POST['duty_estimate'] ?? '');
+    $errors = [];
     
-    $errors = $validator->getErrors();
+    // Validate required fields
+    if (empty($_POST['quoted_price']) || floatval($_POST['quoted_price']) <= 0) {
+        $errors['quoted_price'] = 'Vehicle price is required and must be greater than 0.';
+    }
+    if (empty($_POST['shipping_cost']) || floatval($_POST['shipping_cost']) < 0) {
+        $errors['shipping_cost'] = 'Shipping cost is required.';
+    }
+    if (empty($_POST['duty_estimate']) || floatval($_POST['duty_estimate']) < 0) {
+        $errors['duty_estimate'] = 'Duty estimate is required.';
+    }
     
     if (empty($errors)) {
         try {
@@ -45,70 +156,117 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_quote'])) {
                 'shipping_cost' => $shippingCost,
                 'duty_estimate' => $dutyEstimate,
                 'total_estimate' => $totalEstimate,
-                'admin_notes' => $_POST['admin_notes'] ?? null
+                'admin_notes' => !empty($_POST['admin_notes']) ? trim($_POST['admin_notes']) : null
             ];
             
-            $quoteRequestModel->addQuote($requestId, $quoteData, Auth::userId());
+            $result = $quoteRequestModel->addQuote($requestId, $quoteData, Auth::userId());
             
-            // Create notification for customer
-            $notificationModel = new Notification();
-            $notificationModel->create(
-                $request['customer_user_id'],
-                null, // No order ID yet (quote request)
-                'email',
-                'Quote Ready for ' . $request['request_number'],
-                'Your quote for ' . $request['make'] . ' ' . $request['model'] . ' is ready! Total estimate: ' . formatCurrency($totalEstimate)
-            );
-            
-            clearOld();
-            setSuccess('Quote added successfully and customer has been notified!');
-            header('Location: ' . $_SERVER['PHP_SELF'] . '?id=' . $requestId);
-            exit;
+            if ($result) {
+                // Refresh request data to get updated information
+                $request = $quoteRequestModel->findById($requestId);
+                
+                // Create notification for customer (if customer_user_id exists)
+                if (!empty($request['customer_user_id'])) {
+                    try {
+                        $notificationModel = new Notification();
+                        $notificationModel->create(
+                            $request['customer_user_id'],
+                            null, // No order ID yet (quote request)
+                            'email',
+                            'Quote Ready for ' . ($request['request_number'] ?? 'Your Request'),
+                            'Your quote for ' . ($request['make'] ?? '') . ' ' . ($request['model'] ?? '') . ' is ready! Total estimate: ' . formatCurrency($totalEstimate)
+                        );
+                    } catch (Exception $notifError) {
+                        // Log but don't fail the quote addition
+                        error_log("Failed to create notification: " . $notifError->getMessage());
+                    }
+                }
+                
+                clearOld();
+                setSuccess('Quote added successfully' . (!empty($request['customer_user_id']) ? ' and customer has been notified!' : '!'));
+                redirect(url('admin/quote-requests/view.php?id=' . $requestId));
+            } else {
+                throw new Exception('Failed to add quote. Database update returned false.');
+            }
         } catch (Exception $e) {
-            $errors['general'] = 'An error occurred while adding the quote. Please try again.';
             error_log("Quote addition error: " . $e->getMessage());
+            error_log("Stack trace: " . $e->getTraceAsString());
+            setErrors(['general' => 'An error occurred while adding the quote: ' . htmlspecialchars($e->getMessage())]);
         }
+    } else {
+        setErrors($errors);
     }
     
-    setErrors($errors);
     setOld($_POST);
 }
 
 // Handle status update
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['update_status'])) {
     if (!isset($_POST['csrf_token']) || !Security::verifyToken($_POST['csrf_token'])) {
-        $errors['general'] = 'Invalid security token. Please try again.';
-        setErrors($errors);
-        header('Location: ' . $_SERVER['PHP_SELF'] . '?id=' . $requestId);
-        exit;
+        setErrors(['general' => 'Invalid security token. Please try again.']);
+        redirect(url('admin/quote-requests/view.php?id=' . $requestId));
+    }
+    
+    $newStatus = $_POST['status'] ?? '';
+    
+    // Validate status
+    $validStatuses = ['pending', 'reviewing', 'quoted', 'approved', 'rejected', 'converted'];
+    if (!in_array($newStatus, $validStatuses)) {
+        setErrors(['general' => 'Invalid status value.']);
+        redirect(url('admin/quote-requests/view.php?id=' . $requestId));
     }
     
     try {
-        $quoteRequestModel->update($requestId, [
-            'status' => $_POST['status']
+        $result = $quoteRequestModel->update($requestId, [
+            'status' => $newStatus
         ]);
         
-        setSuccess('Status updated successfully!');
-        header('Location: ' . $_SERVER['PHP_SELF'] . '?id=' . $requestId);
-        exit;
+        if ($result) {
+            setSuccess('Status updated successfully!');
+            redirect(url('admin/quote-requests/view.php?id=' . $requestId));
+        } else {
+            throw new Exception('Failed to update status. Database update returned false.');
+        }
     } catch (Exception $e) {
-        setErrors(['general' => 'An error occurred while updating status.']);
-        header('Location: ' . $_SERVER['PHP_SELF'] . '?id=' . $requestId);
-        exit;
+        error_log("Status update error: " . $e->getMessage());
+        error_log("Stack trace: " . $e->getTraceAsString());
+        setErrors(['general' => 'An error occurred while updating status: ' . htmlspecialchars($e->getMessage())]);
+        redirect(url('admin/quote-requests/view.php?id=' . $requestId));
     }
 }
 
-// Refresh request data
-$request = $quoteRequestModel->findById($requestId);
+// Refresh request data (if not already set from POST handling)
+// Note: $request should already be set above, but we check to be safe
+if (!isset($request) || $request === null || $request === false || empty($request)) {
+    try {
+        $request = $quoteRequestModel->findById($requestId);
+        if ($request === null || $request === false || empty($request)) {
+            error_log("Quote request not found when refreshing. ID: " . $requestId);
+            setErrors(['general' => 'Quote request not found. ID: ' . $requestId]);
+            redirect(url('admin/quote-requests.php'));
+        }
+    } catch (PDOException $e) {
+        error_log("PDO Error refreshing quote request ID {$requestId}: " . $e->getMessage());
+        setErrors(['general' => 'Database error: Unable to load quote request.']);
+        redirect(url('admin/quote-requests.php'));
+    } catch (Exception $e) {
+        error_log("Error refreshing quote request ID {$requestId}: " . $e->getMessage());
+        setErrors(['general' => 'An error occurred while loading the quote request. Please check the error logs.']);
+        redirect(url('admin/quote-requests.php'));
+    }
+}
 
-$title = "Quote Request #" . $request['request_number'];
+// Generate CSRF token for forms
+Security::generateToken();
+
+$title = "Quote Request #" . ($request['request_number'] ?? 'N/A');
 ?>
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Quote Request #<?php echo htmlspecialchars($request['request_number']); ?> - Andcorp Autos</title>
+    <title>Quote Request #<?php echo htmlspecialchars($request['request_number'] ?? 'N/A'); ?> - Andcorp Autos</title>
     <link rel="icon" type="image/png" href="<?php echo url('assets/images/favicon.png'); ?>">
     <link rel="apple-touch-icon" href="<?php echo url('assets/images/logo.png'); ?>">
     <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -128,7 +286,7 @@ $title = "Quote Request #" . $request['request_number'];
                 <div class="page-header animate-in">
                     <div class="d-flex justify-content-between align-items-center">
                         <div>
-                            <h1 class="display-5">Quote Request #<?php echo htmlspecialchars($request['request_number']); ?></h1>
+                            <h1 class="display-5">Quote Request #<?php echo htmlspecialchars($request['request_number'] ?? 'N/A'); ?></h1>
                             <p class="lead mb-0">Review and provide quote for customer request</p>
                         </div>
                         <div>
@@ -163,18 +321,18 @@ $title = "Quote Request #" . $request['request_number'];
                             <div class="card-body">
                                 <div class="row">
                                     <div class="col-md-6">
-                                        <p><strong>Name:</strong> <?php echo htmlspecialchars($request['customer_first_name'] . ' ' . $request['customer_last_name']); ?></p>
-                                        <p><strong>Email:</strong> <?php echo htmlspecialchars($request['customer_email']); ?></p>
+                                        <p><strong>Name:</strong> <?php echo htmlspecialchars(($request['customer_first_name'] ?? '') . ' ' . ($request['customer_last_name'] ?? '')); ?></p>
+                                        <p><strong>Email:</strong> <?php echo htmlspecialchars($request['customer_email'] ?? 'N/A'); ?></p>
                                         <p><strong>Phone:</strong> <?php echo htmlspecialchars($request['customer_phone'] ?? 'N/A'); ?></p>
                                     </div>
                                     <div class="col-md-6">
-                                        <?php if ($request['ghana_card_number']): ?>
+                                        <?php if (isset($request['ghana_card_number']) && $request['ghana_card_number']): ?>
                                             <p><strong>Ghana Card:</strong> <?php echo htmlspecialchars($request['ghana_card_number']); ?></p>
                                         <?php endif; ?>
-                                        <p><strong>Requested:</strong> <?php echo date('M d, Y g:i A', strtotime($request['created_at'])); ?></p>
+                                        <p><strong>Requested:</strong> <?php echo date('M d, Y g:i A', strtotime($request['created_at'] ?? 'now')); ?></p>
                                         <p><strong>Status:</strong> 
                                             <?php
-                                            $statusClass = match($request['status']) {
+                                            $statusClass = match($request['status'] ?? '') {
                                                 'pending' => 'bg-warning',
                                                 'reviewing' => 'bg-info',
                                                 'quoted' => 'bg-primary',
@@ -185,7 +343,7 @@ $title = "Quote Request #" . $request['request_number'];
                                             };
                                             ?>
                                             <span class="badge <?php echo $statusClass; ?>">
-                                                <?php echo ucfirst($request['status']); ?>
+                                                <?php echo ucfirst($request['status'] ?? 'Unknown'); ?>
                                             </span>
                                         </p>
                                     </div>
@@ -259,14 +417,15 @@ $title = "Quote Request #" . $request['request_number'];
                         <?php endif; ?>
 
                         <!-- Add Quote Form -->
-                        <?php if ($request['status'] === 'pending' || $request['status'] === 'reviewing'): ?>
+                        <?php if (($request['status'] ?? '') === 'pending' || ($request['status'] ?? '') === 'reviewing'): ?>
                         <div class="card-modern mb-4 animate-in">
                             <div class="card-header">
                                 <h5 class="mb-0"><i class="bi bi-calculator"></i> Provide Quote</h5>
                             </div>
                             <div class="card-body">
-                                <form method="POST" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']) . '?id=' . $requestId; ?>">
+                                <form method="POST" action="<?php echo htmlspecialchars(url('admin/quote-requests/view.php?id=' . $requestId)); ?>">
                                     <?php echo Security::csrfField(); ?>
+                                    <input type="hidden" name="id" value="<?php echo $requestId; ?>">
                                     
                                     <div class="row">
                                         <div class="col-md-4 mb-3">
@@ -321,7 +480,7 @@ $title = "Quote Request #" . $request['request_number'];
                         <?php endif; ?>
 
                         <!-- Quote Information (if exists) -->
-                        <?php if ($request['quoted_price']): ?>
+                        <?php if (!empty($request['quoted_price'])): ?>
                         <div class="card-modern mb-4 animate-in">
                             <div class="card-header bg-primary text-white">
                                 <h5 class="mb-0"><i class="bi bi-file-earmark-check"></i> Quote Provided</h5>
@@ -348,11 +507,15 @@ $title = "Quote Request #" . $request['request_number'];
                                     </p>
                                 <?php endif; ?>
                                 
+                                <?php if (!empty($request['quoted_by_first_name']) || !empty($request['quoted_by_last_name'])): ?>
                                 <hr>
                                 <p class="small text-muted mb-0">
-                                    <i class="bi bi-person"></i> Quoted by: <?php echo htmlspecialchars($request['quoted_by_first_name'] . ' ' . $request['quoted_by_last_name']); ?><br>
-                                    <i class="bi bi-clock"></i> Quote Date: <?php echo date('M d, Y g:i A', strtotime($request['quoted_at'])); ?>
+                                    <i class="bi bi-person"></i> Quoted by: <?php echo htmlspecialchars(($request['quoted_by_first_name'] ?? '') . ' ' . ($request['quoted_by_last_name'] ?? '')); ?><br>
+                                    <?php if (!empty($request['quoted_at'])): ?>
+                                        <i class="bi bi-clock"></i> Quote Date: <?php echo date('M d, Y g:i A', strtotime($request['quoted_at'])); ?>
+                                    <?php endif; ?>
                                 </p>
+                                <?php endif; ?>
                             </div>
                         </div>
                         <?php endif; ?>
@@ -366,13 +529,13 @@ $title = "Quote Request #" . $request['request_number'];
                             </div>
                             <div class="card-body">
                                 <div class="d-grid gap-2">
-                                    <?php if ($request['status'] === 'quoted' || $request['status'] === 'approved'): ?>
+                                    <?php if (($request['status'] ?? '') === 'quoted' || ($request['status'] ?? '') === 'approved'): ?>
                                         <a href="<?php echo url('admin/quote-requests/convert.php?id=' . $requestId); ?>" class="btn btn-success">
                                             <i class="bi bi-arrow-right-circle"></i> Convert to Order
                                         </a>
                                     <?php endif; ?>
                                     
-                                    <?php if ($request['order_id']): ?>
+                                    <?php if (!empty($request['order_id'])): ?>
                                         <a href="<?php echo url('admin/orders/edit.php?id=' . $request['order_id']); ?>" class="btn btn-primary">
                                             <i class="bi bi-box-seam"></i> View Order
                                         </a>
@@ -391,16 +554,17 @@ $title = "Quote Request #" . $request['request_number'];
                                 <h5 class="mb-0"><i class="bi bi-toggles"></i> Update Status</h5>
                             </div>
                             <div class="card-body">
-                                <form method="POST" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']) . '?id=' . $requestId; ?>">
+                                <form method="POST" action="<?php echo htmlspecialchars(url('admin/quote-requests/view.php?id=' . $requestId)); ?>">
                                     <?php echo Security::csrfField(); ?>
+                                    <input type="hidden" name="id" value="<?php echo $requestId; ?>">
                                     
                                     <div class="mb-3">
                                         <select name="status" class="form-select" required>
-                                            <option value="pending" <?php echo $request['status'] === 'pending' ? 'selected' : ''; ?>>Pending Review</option>
-                                            <option value="reviewing" <?php echo $request['status'] === 'reviewing' ? 'selected' : ''; ?>>Under Review</option>
-                                            <option value="quoted" <?php echo $request['status'] === 'quoted' ? 'selected' : ''; ?>>Quote Ready</option>
-                                            <option value="approved" <?php echo $request['status'] === 'approved' ? 'selected' : ''; ?>>Approved</option>
-                                            <option value="rejected" <?php echo $request['status'] === 'rejected' ? 'selected' : ''; ?>>Rejected</option>
+                                            <option value="pending" <?php echo ($request['status'] ?? '') === 'pending' ? 'selected' : ''; ?>>Pending Review</option>
+                                            <option value="reviewing" <?php echo ($request['status'] ?? '') === 'reviewing' ? 'selected' : ''; ?>>Under Review</option>
+                                            <option value="quoted" <?php echo ($request['status'] ?? '') === 'quoted' ? 'selected' : ''; ?>>Quote Ready</option>
+                                            <option value="approved" <?php echo ($request['status'] ?? '') === 'approved' ? 'selected' : ''; ?>>Approved</option>
+                                            <option value="rejected" <?php echo ($request['status'] ?? '') === 'rejected' ? 'selected' : ''; ?>>Rejected</option>
                                         </select>
                                     </div>
                                     
@@ -412,7 +576,7 @@ $title = "Quote Request #" . $request['request_number'];
                         </div>
 
                         <!-- Convert to Order -->
-                        <?php if ($request['quoted_price'] && !$request['order_id'] && $request['status'] !== 'rejected'): ?>
+                        <?php if (!empty($request['quoted_price']) && empty($request['order_id']) && ($request['status'] ?? '') !== 'rejected'): ?>
                         <div class="card-modern animate-in mt-3">
                             <div class="card-header bg-success text-white">
                                 <h5 class="mb-0"><i class="bi bi-arrow-right-circle"></i> Convert to Order</h5>
@@ -428,7 +592,7 @@ $title = "Quote Request #" . $request['request_number'];
                                 </a>
                             </div>
                         </div>
-                        <?php elseif ($request['order_id']): ?>
+                        <?php elseif (!empty($request['order_id'])): ?>
                         <div class="card-modern animate-in mt-3">
                             <div class="card-header bg-dark text-white">
                                 <h5 class="mb-0"><i class="bi bi-check-circle"></i> Converted to Order</h5>

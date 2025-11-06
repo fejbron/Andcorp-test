@@ -1,71 +1,50 @@
-# Files and directories to exclude from deployment package
+# Files and directories to exclude from deployment
 
-# Local development files
-.DS_Store
-Thumbs.db
-*.log
-*.swp
-*.swo
-*~
-
-# IDE and editor files
-.idea/
-.vscode/
-*.sublime-project
-*.sublime-workspace
-
-# Git files
+# Version control
 .git/
 .gitignore
 .gitattributes
 
-# Development/test files
-test_*.php
-debug_*.php
-MAMP_SETUP.md
-QUICKSTART.md
-
-# Node modules (if any)
+# Development files
 node_modules/
-package.json
-package-lock.json
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
-# Composer vendor (if managed separately)
-# vendor/
+# Test and debug files
+test_*.php
+*_test.php
+debug_*.php
+check_*.php
 
-# Local environment
-.env
-.env.local
-.env.development
+# Documentation (keep DEPLOYMENT.md)
+*.md
+!DEPLOYMENT.md
 
-# Cache and temporary files
-storage/cache/*
-!storage/cache/.gitkeep
-public/uploads/*
-!public/uploads/.gitkeep
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp
 
 # OS files
 .DS_Store
-.AppleDouble
-.LSOverride
-Icon
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
+Thumbs.db
 desktop.ini
+
+# Local configuration (will be updated on server)
+config/database.local.php
 
 # Backup files
 *.bak
 *.backup
-*.old
-*.orig
+*~
 
-# Logs
-logs/
-*.log
-npm-debug.log*
-
-# Documentation that's only for local dev
-CONTRIBUTING.md
-
+# IDE files
+.htaccess.local
+.env.local

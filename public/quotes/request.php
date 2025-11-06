@@ -10,11 +10,16 @@ if (Auth::isStaff()) {
 $customerModel = new Customer();
 $customer = $customerModel->findByUserId(Auth::userId());
 
+// Check if customer exists and has a valid ID
+if (!$customer || empty($customer['id'])) {
+    setErrors(['general' => 'Customer profile not found. Please complete your profile first.']);
+    redirect(url('profile.php'));
+}
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // CSRF protection
     if (!isset($_POST['csrf_token']) || !Security::verifyToken($_POST['csrf_token'])) {
-        $errors['general'] = 'Invalid security token. Please try again.';
-        setErrors($errors);
+        setErrors(['general' => 'Invalid security token. Please try again.']);
         redirect(url('quotes/request.php'));
     }
     
@@ -34,31 +39,41 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'vehicle_type' => $_POST['vehicle_type'],
                 'make' => $_POST['make'],
                 'model' => $_POST['model'],
-                'year' => $_POST['year'] ?? null,
-                'trim' => $_POST['trim'] ?? null,
-                'vin' => $_POST['vin'] ?? null,
-                'lot_number' => $_POST['lot_number'] ?? null,
-                'auction_link' => $_POST['auction_link'] ?? null,
-                'budget_min' => $_POST['budget_min'] ?? null,
-                'budget_max' => $_POST['budget_max'] ?? null,
-                'preferred_color' => $_POST['preferred_color'] ?? null,
-                'additional_requirements' => $_POST['additional_requirements'] ?? null
+                'year' => !empty($_POST['year']) ? intval($_POST['year']) : null,
+                'trim' => !empty($_POST['trim']) ? trim($_POST['trim']) : null,
+                'vin' => !empty($_POST['vin']) ? trim($_POST['vin']) : null,
+                'lot_number' => !empty($_POST['lot_number']) ? trim($_POST['lot_number']) : null,
+                'auction_link' => !empty($_POST['auction_link']) ? trim($_POST['auction_link']) : null,
+                'budget_min' => !empty($_POST['budget_min']) ? floatval($_POST['budget_min']) : null,
+                'budget_max' => !empty($_POST['budget_max']) ? floatval($_POST['budget_max']) : null,
+                'preferred_color' => !empty($_POST['preferred_color']) ? trim($_POST['preferred_color']) : null,
+                'additional_requirements' => !empty($_POST['additional_requirements']) ? trim($_POST['additional_requirements']) : null
             ];
             
             $requestId = $quoteRequestModel->create($requestData);
             
-            clearOld();
-            setSuccess('Quote request submitted successfully! We will review and get back to you soon.');
-            redirect(url('../quotes.php'));
+            if ($requestId > 0) {
+                clearOld();
+                setSuccess('Quote request submitted successfully! We will review and get back to you soon.');
+                redirect(url('quotes.php'));
+            } else {
+                throw new Exception('Failed to create quote request. No ID returned.');
+            }
         } catch (Exception $e) {
-            $errors['general'] = 'An error occurred while submitting your request. Please try again.';
             error_log("Quote request creation error: " . $e->getMessage());
+            error_log("Stack trace: " . $e->getTraceAsString());
+            setErrors(['general' => 'An error occurred while submitting your request. Please try again.']);
         }
     }
     
-    setErrors($errors);
+    if (!empty($errors)) {
+        setErrors($errors);
+    }
     setOld($_POST);
 }
+
+// Generate CSRF token for form
+Security::generateToken();
 
 $title = "Request a Quote";
 ?>
@@ -110,7 +125,7 @@ $title = "Request a Quote";
                         <h5 class="mb-0"><i class="bi bi-car-front"></i> Vehicle Details</h5>
                     </div>
                     <div class="card-body">
-                        <form method="POST" action="<?php echo htmlspecialchars($_SERVER['PHP_SELF']); ?>">
+                        <form method="POST" action="<?php echo htmlspecialchars(url('quotes/request.php')); ?>">
                             <?php echo Security::csrfField(); ?>
                             
                             <div class="row">

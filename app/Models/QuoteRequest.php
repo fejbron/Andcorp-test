@@ -140,24 +140,97 @@ class QuoteRequest {
      * Find quote request by ID
      */
     public function findById($id) {
-        $sql = "SELECT qr.*,
-                       c.user_id as customer_user_id,
-                       u.first_name as customer_first_name,
-                       u.last_name as customer_last_name,
-                       u.email as customer_email,
-                       u.phone as customer_phone,
-                       c.ghana_card_number,
-                       admin.first_name as quoted_by_first_name,
-                       admin.last_name as quoted_by_last_name
-                FROM quote_requests qr
-                LEFT JOIN customers c ON qr.customer_id = c.id
-                LEFT JOIN users u ON c.user_id = u.id
-                LEFT JOIN users admin ON qr.quoted_by = admin.id
-                WHERE qr.id = :id";
-        
-        $stmt = $this->db->prepare($sql);
-        $stmt->execute([':id' => Security::sanitizeInt($id)]);
-        return $stmt->fetch(PDO::FETCH_ASSOC);
+        try {
+            // Ensure ID is a valid integer
+            $sanitizedId = Security::sanitizeInt($id);
+            
+            if (!$sanitizedId || $sanitizedId <= 0) {
+                error_log("QuoteRequest::findById() - Invalid ID provided: " . var_export($id, true) . " (sanitized: " . var_export($sanitizedId, true) . ")");
+                return null;
+            }
+            
+            // First, verify the quote request exists (simple query without JOINs)
+            $checkSql = "SELECT id FROM quote_requests WHERE id = :id LIMIT 1";
+            $checkStmt = $this->db->prepare($checkSql);
+            $checkStmt->bindValue(':id', $sanitizedId, PDO::PARAM_INT);
+            $checkStmt->execute();
+            $exists = $checkStmt->fetch(PDO::FETCH_ASSOC);
+            
+            if (!$exists) {
+                error_log("QuoteRequest::findById() - Quote request ID {$sanitizedId} does not exist in database");
+                return null;
+            }
+            
+            // Now fetch with JOINs (LEFT JOINs ensure we get the quote request even if related data is missing)
+            // Note: ghana_card_number column may not exist on all servers, so we omit it
+            $sql = "SELECT qr.*,
+                           c.user_id as customer_user_id,
+                           u.first_name as customer_first_name,
+                           u.last_name as customer_last_name,
+                           u.email as customer_email,
+                           u.phone as customer_phone,
+                           admin.first_name as quoted_by_first_name,
+                           admin.last_name as quoted_by_last_name
+                    FROM quote_requests qr
+                    LEFT JOIN customers c ON qr.customer_id = c.id
+                    LEFT JOIN users u ON c.user_id = u.id
+                    LEFT JOIN users admin ON qr.quoted_by = admin.id
+                    WHERE qr.id = :id
+                    LIMIT 1";
+            
+            $stmt = $this->db->prepare($sql);
+            
+            // Bind the parameter explicitly
+            $stmt->bindValue(':id', $sanitizedId, PDO::PARAM_INT);
+            
+            // Log the query for debugging
+            error_log("QuoteRequest::findById() - Executing query with ID: " . $sanitizedId . " (type: " . gettype($sanitizedId) . ")");
+            
+            $stmt->execute();
+            $result = $stmt->fetch(PDO::FETCH_ASSOC);
+            
+            // Log result
+            if ($result === false || empty($result)) {
+                error_log("QuoteRequest::findById() - JOIN query returned false/empty for ID: " . $sanitizedId);
+                
+                // Fallback: Get basic quote request data without JOINs if JOIN query fails
+                $fallbackSql = "SELECT * FROM quote_requests WHERE id = :id LIMIT 1";
+                $fallbackStmt = $this->db->prepare($fallbackSql);
+                $fallbackStmt->bindValue(':id', $sanitizedId, PDO::PARAM_INT);
+                $fallbackStmt->execute();
+                $result = $fallbackStmt->fetch(PDO::FETCH_ASSOC);
+                
+                if ($result !== false && !empty($result)) {
+                    error_log("QuoteRequest::findById() - Fallback query successful, returning basic quote request data");
+                    // Add empty customer/admin fields for consistency
+                    $result['customer_user_id'] = null;
+                    $result['customer_first_name'] = null;
+                    $result['customer_last_name'] = null;
+                    $result['customer_email'] = null;
+                    $result['customer_phone'] = null;
+                    $result['quoted_by_first_name'] = null;
+                    $result['quoted_by_last_name'] = null;
+                } else {
+                    error_log("QuoteRequest::findById() - Fallback query also failed for ID: " . $sanitizedId);
+                    return null;
+                }
+            } else {
+                error_log("QuoteRequest::findById() - Found record for ID: " . $sanitizedId . ", Request Number: " . ($result['request_number'] ?? 'N/A'));
+            }
+            
+            // Return the result (should not be false at this point if record exists)
+            return $result;
+        } catch (PDOException $e) {
+            error_log("QuoteRequest::findById() PDO error: " . $e->getMessage());
+            error_log("QuoteRequest::findById() SQL State: " . $e->getCode());
+            error_log("QuoteRequest::findById() Error Info: " . print_r($e->errorInfo, true));
+            error_log("QuoteRequest::findById() Attempted ID: " . var_export($id, true));
+            throw $e;
+        } catch (Exception $e) {
+            error_log("QuoteRequest::findById() error: " . $e->getMessage());
+            error_log("QuoteRequest::findById() Attempted ID: " . var_export($id, true));
+            throw $e;
+        }
     }
     
     /**
