@@ -317,20 +317,21 @@ class QuoteRequest {
                 FROM quote_requests qr
                 LEFT JOIN customers c ON qr.customer_id = c.id
                 LEFT JOIN users u ON c.user_id = u.id
-                WHERE qr.request_number LIKE :query
-                   OR qr.vin LIKE :query
-                   OR qr.lot_number LIKE :query
-                   OR qr.make LIKE :query
-                   OR qr.model LIKE :query
-                   OR u.first_name LIKE :query
-                   OR u.last_name LIKE :query
-                   OR u.email LIKE :query
+                WHERE qr.request_number LIKE ?
+                   OR qr.vin LIKE ?
+                   OR qr.lot_number LIKE ?
+                   OR qr.make LIKE ?
+                   OR qr.model LIKE ?
+                   OR u.first_name LIKE ?
+                   OR u.last_name LIKE ?
+                   OR u.email LIKE ?
                 ORDER BY qr.created_at DESC
                 LIMIT 100";
         
         $stmt = $this->db->prepare($sql);
         $searchTerm = '%' . Security::sanitizeString($query, 255) . '%';
-        $stmt->execute([':query' => $searchTerm]);
+        // Pass the search term 8 times (once for each ? placeholder)
+        $stmt->execute([$searchTerm, $searchTerm, $searchTerm, $searchTerm, $searchTerm, $searchTerm, $searchTerm, $searchTerm]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
     

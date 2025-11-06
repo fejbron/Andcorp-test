@@ -355,18 +355,19 @@ class Deposit {
                 LEFT JOIN orders o ON d.order_id = o.id
                 LEFT JOIN customers c ON d.customer_id = c.id
                 LEFT JOIN users u ON c.user_id = u.id
-                WHERE o.order_number LIKE :query
-                   OR d.reference_number LIKE :query
-                   OR d.bank_name LIKE :query
-                   OR u.first_name LIKE :query
-                   OR u.last_name LIKE :query
-                   OR u.email LIKE :query
+                WHERE o.order_number LIKE ?
+                   OR d.reference_number LIKE ?
+                   OR d.bank_name LIKE ?
+                   OR u.first_name LIKE ?
+                   OR u.last_name LIKE ?
+                   OR u.email LIKE ?
                 ORDER BY d.transaction_date DESC, d.transaction_time DESC
                 LIMIT 100";
         
         $stmt = $this->db->prepare($sql);
         $searchTerm = '%' . Security::sanitizeString($query, 255) . '%';
-        $stmt->execute([':query' => $searchTerm]);
+        // Pass the search term 6 times (once for each ? placeholder)
+        $stmt->execute([$searchTerm, $searchTerm, $searchTerm, $searchTerm, $searchTerm, $searchTerm]);
         return $stmt->fetchAll(PDO::FETCH_ASSOC);
     }
 }
