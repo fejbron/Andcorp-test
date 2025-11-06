@@ -97,7 +97,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['document']) && $canU
                             
                             // Log activity
                             try {
-                                Auth::logOrderActivity($orderId, $user['id'], 'document_uploaded', 
+                                Auth::logOrderActivity($user['id'], $orderId, 'document_uploaded', 
                                     "Uploaded {$documentType} document");
                             } catch (Exception $e) {
                                 // Don't fail if logging fails
@@ -165,7 +165,7 @@ if (isset($_GET['delete']) && $canUpload) {
         
         $_SESSION['success'] = 'Document deleted successfully!';
         
-        Auth::logOrderActivity($orderId, $user['id'], 'document_deleted', 
+        Auth::logOrderActivity($user['id'], $orderId, 'document_deleted', 
             "Deleted {$doc['document_type']} document");
     }
     
@@ -405,7 +405,7 @@ $title = "Order Documents - " . $order['order_number'];
         </div>
     </div>
 
-    <?php include 'includes/footer.php'; ?>
+    <?php include __DIR__ . '/../includes/footer.php'; ?>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
 </body>
