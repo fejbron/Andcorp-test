@@ -265,7 +265,7 @@ foreach ($deposits as $deposit) {
                     </div>
                     <div class="card-body">
                         <ol class="small">
-                            <li class="mb-2">Select your vehicle from Copart/IAA</li>
+                            <li class="mb-2">We scout major Dealership or insurance company to get your desired car</li>
                             <li class="mb-2">We purchase on your behalf</li>
                             <li class="mb-2">Track shipping to Ghana</li>
                             <li class="mb-2">Pay customs & clearing fees</li>

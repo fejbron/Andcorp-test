@@ -144,8 +144,8 @@
                 <div class="col-md-6 col-lg-4">
                     <div class="text-center">
                         <div class="step-number mx-auto">1</div>
-                        <h4>Select Your Vehicle</h4>
-                        <p class="text-muted">Browse Copart/IAA listings and tell us which vehicle you want</p>
+                        <h4>We Scout for Your Vehicle</h4>
+                        <p class="text-muted">We scout major Dealership or insurance company to get your desired car</p>
                     </div>
                 </div>
                 <div class="col-md-6 col-lg-4">
