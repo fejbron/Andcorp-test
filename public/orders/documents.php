@@ -42,30 +42,39 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['document']) && $canU
         $documentType = Security::sanitizeString($_POST['document_type'] ?? '', 50);
         
         // Validate document type
-        $validator = new Validator();
-        $validator->in($documentType, ['car_image', 'title', 'bill_of_lading', 'bill_of_entry'], 'Invalid document type');
-        
-        if ($validator->fails()) {
-            $_SESSION['error'] = implode(', ', $validator->getErrors());
+        $allowedTypes = ['car_image', 'title', 'bill_of_lading', 'bill_of_entry'];
+        if (!in_array($documentType, $allowedTypes, true)) {
+            $_SESSION['error'] = 'Invalid document type';
         } else {
             $file = $_FILES['document'];
             
-            // Validate file
-            $validation = Security::validateFileUpload($file, [
-                'allowed_types' => ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'],
-                'max_size' => 10 * 1024 * 1024 // 10MB
-            ]);
+            // Validate file - fix: validateFileUpload expects (file, allowedTypes array, maxSize)
+            $allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
+            $maxSize = 10 * 1024 * 1024; // 10MB
+            $validation = Security::validateFileUpload($file, $allowedMimeTypes, $maxSize);
             
             if ($validation['valid']) {
                 $uploadDir = __DIR__ . '/../uploads/' . ($documentType === 'car_image' ? 'cars' : 'documents');
                 
+                // Create directory if it doesn't exist (critical for live server)
+                if (!is_dir($uploadDir)) {
+                    if (!mkdir($uploadDir, 0755, true)) {
+                        $_SESSION['error'] = 'Failed to create upload directory. Please contact administrator.';
+                        error_log("Failed to create upload directory: $uploadDir");
+                        redirect(url('orders/documents.php?id=' . $orderId));
+                        exit;
+                    }
+                }
+                
                 // Generate secure filename
-                $extension = pathinfo($file['name'], PATHINFO_EXTENSION);
+                $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
                 $secureFilename = bin2hex(random_bytes(16)) . '.' . $extension;
                 $uploadPath = $uploadDir . '/' . $secureFilename;
                 $relativePath = 'uploads/' . ($documentType === 'car_image' ? 'cars' : 'documents') . '/' . $secureFilename;
                 
                 if (move_uploaded_file($file['tmp_name'], $uploadPath)) {
+                    // Set proper file permissions
+                    @chmod($uploadPath, 0644);
                     // Save to database
                     $stmt = $db->prepare("
                         INSERT INTO order_documents 
@@ -84,13 +93,26 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['document']) && $canU
                     
                     $_SESSION['success'] = 'Document uploaded successfully!';
                     
-                    // Log activity
-                    Auth::logOrderActivity($orderId, $user['id'], 'document_uploaded', 
-                        "Uploaded {$documentType} document");
+                    // Log activity (don't fail if logging fails)
+                    try {
+                        Auth::logOrderActivity($orderId, $user['id'], 'document_uploaded', 
+                            "Uploaded {$documentType} document");
+                    } catch (Exception $e) {
+                        error_log("Failed to log document upload activity: " . $e->getMessage());
+                    }
                     
                     redirect(url('orders/documents.php?id=' . $orderId));
                 } else {
-                    $_SESSION['error'] = 'Failed to upload file. Please try again.';
+                    $errorMsg = 'Failed to upload file. ';
+                    if (!is_dir($uploadDir)) {
+                        $errorMsg .= 'Upload directory does not exist.';
+                    } elseif (!is_writable($uploadDir)) {
+                        $errorMsg .= 'Upload directory is not writable.';
+                    } else {
+                        $errorMsg .= 'Please try again.';
+                    }
+                    $_SESSION['error'] = $errorMsg;
+                    error_log("File upload failed. Directory: $uploadDir, Writable: " . (is_writable($uploadDir) ? 'yes' : 'no'));
                 }
             } else {
                 $_SESSION['error'] = $validation['error'];

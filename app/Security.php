@@ -113,24 +113,58 @@ class Security {
     public static function validateFileUpload($file, $allowedTypes = ['image/jpeg', 'image/png', 'image/gif'], $maxSize = 5242880) {
         $errors = [];
         
-        if (!isset($file['tmp_name']) || !is_uploaded_file($file['tmp_name'])) {
+        if (!isset($file['tmp_name']) || empty($file['tmp_name'])) {
             return ['valid' => false, 'error' => 'No file uploaded'];
         }
         
+        if (!is_uploaded_file($file['tmp_name'])) {
+            return ['valid' => false, 'error' => 'Invalid file upload'];
+        }
+        
+        // Check upload errors
         if ($file['error'] !== UPLOAD_ERR_OK) {
-            return ['valid' => false, 'error' => 'Upload error: ' . $file['error']];
+            $errorMessages = [
+                UPLOAD_ERR_INI_SIZE => 'File exceeds upload_max_filesize directive',
+                UPLOAD_ERR_FORM_SIZE => 'File exceeds MAX_FILE_SIZE directive',
+                UPLOAD_ERR_PARTIAL => 'File was only partially uploaded',
+                UPLOAD_ERR_NO_FILE => 'No file was uploaded',
+                UPLOAD_ERR_NO_TMP_DIR => 'Missing temporary folder',
+                UPLOAD_ERR_CANT_WRITE => 'Failed to write file to disk',
+                UPLOAD_ERR_EXTENSION => 'A PHP extension stopped the file upload'
+            ];
+            $errorMsg = $errorMessages[$file['error']] ?? 'Upload error: ' . $file['error'];
+            return ['valid' => false, 'error' => $errorMsg];
         }
         
         if ($file['size'] > $maxSize) {
-            return ['valid' => false, 'error' => 'File size exceeds maximum allowed size'];
+            return ['valid' => false, 'error' => 'File size exceeds maximum allowed size (' . round($maxSize / 1024 / 1024, 2) . 'MB)'];
         }
         
-        $finfo = finfo_open(FILEINFO_MIME_TYPE);
-        $mimeType = finfo_file($finfo, $file['tmp_name']);
-        finfo_close($finfo);
+        // Validate MIME type using finfo if available, otherwise fallback to extension
+        $mimeType = null;
+        if (function_exists('finfo_open')) {
+            $finfo = @finfo_open(FILEINFO_MIME_TYPE);
+            if ($finfo) {
+                $mimeType = @finfo_file($finfo, $file['tmp_name']);
+                @finfo_close($finfo);
+            }
+        }
         
-        if (!in_array($mimeType, $allowedTypes)) {
-            return ['valid' => false, 'error' => 'File type not allowed'];
+        // Fallback: determine MIME type from extension if finfo failed
+        if (!$mimeType) {
+            $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+            $mimeMap = [
+                'jpg' => 'image/jpeg',
+                'jpeg' => 'image/jpeg',
+                'png' => 'image/png',
+                'gif' => 'image/gif',
+                'pdf' => 'application/pdf'
+            ];
+            $mimeType = $mimeMap[$extension] ?? null;
+        }
+        
+        if (!$mimeType || !in_array($mimeType, $allowedTypes, true)) {
+            return ['valid' => false, 'error' => 'File type not allowed. Allowed types: ' . implode(', ', $allowedTypes)];
         }
         
         // Additional security: check file extension
