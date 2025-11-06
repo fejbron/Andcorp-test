@@ -80,6 +80,23 @@ class Auth {
     
     public static function requireAuth() {
         if (!self::check()) {
+            // Store the intended destination for redirect after login
+            // Use absolute URL to ensure it works correctly after login
+            if (!empty($_SERVER['REQUEST_URI'])) {
+                $requestUri = $_SERVER['REQUEST_URI'];
+                // If it's not already an absolute URL, make it one
+                if (strpos($requestUri, 'http://') !== 0 && strpos($requestUri, 'https://') !== 0) {
+                    $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+                    $host = $_SERVER['HTTP_HOST'] ?? $_SERVER['SERVER_NAME'] ?? '';
+                    if (!empty($host)) {
+                        $_SESSION['redirect_after_login'] = $protocol . $host . $requestUri;
+                    } else {
+                        $_SESSION['redirect_after_login'] = $requestUri;
+                    }
+                } else {
+                    $_SESSION['redirect_after_login'] = $requestUri;
+                }
+            }
             redirect(url('login.php'));
         }
     }

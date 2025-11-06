@@ -65,7 +65,7 @@ if (file_exists(__DIR__ . '/../.env')) {
 function getBasePath() {
     static $basePath = null;
     if ($basePath === null) {
-        // Get the public directory path from SCRIPT_NAME
+        // Method 1: Try SCRIPT_NAME first (most reliable)
         $scriptName = $_SERVER['SCRIPT_NAME'] ?? $_SERVER['PHP_SELF'] ?? '';
         
         if (!empty($scriptName)) {
@@ -83,23 +83,100 @@ function getBasePath() {
                     $basePath = '';
                 }
             }
-        } else {
-            $basePath = '';
+        }
+        
+        // Method 2: If still empty, try REQUEST_URI (works better on cPanel)
+        if (empty($basePath) && !empty($_SERVER['REQUEST_URI'])) {
+            $requestUri = $_SERVER['REQUEST_URI'];
+            // Remove query string
+            $requestUri = strtok($requestUri, '?');
+            
+            if (strpos($requestUri, '/public/') !== false) {
+                $parts = explode('/public/', $requestUri);
+                $basePath = $parts[0] . '/public';
+            }
+        }
+        
+        // Method 3: Use DOCUMENT_ROOT to calculate relative path (cPanel fallback)
+        if (empty($basePath) && !empty($_SERVER['DOCUMENT_ROOT'])) {
+            $docRoot = $_SERVER['DOCUMENT_ROOT'];
+            $scriptFile = $_SERVER['SCRIPT_FILENAME'] ?? '';
+            
+            if (!empty($scriptFile) && strpos($scriptFile, $docRoot) === 0) {
+                // Get relative path from document root
+                $relativePath = str_replace($docRoot, '', $scriptFile);
+                $relativePath = dirname($relativePath);
+                
+                // If it contains 'public', extract up to public
+                if (strpos($relativePath, '/public') !== false) {
+                    $parts = explode('/public', $relativePath);
+                    $basePath = $parts[0] . '/public';
+                } elseif ($relativePath !== '/' && $relativePath !== '\\' && $relativePath !== '.') {
+                    $basePath = rtrim($relativePath, '/');
+                }
+            }
+        }
+        
+        // Method 4: Final fallback - check if we're in a public subdirectory
+        if (empty($basePath)) {
+            // Check if current directory is public or contains public
+            $currentDir = __DIR__; // This is the public directory
+            if (strpos($currentDir, '/public') !== false) {
+                // Extract the path up to public
+                $parts = explode('/public', $currentDir);
+                // Calculate relative to document root if possible
+                if (!empty($_SERVER['DOCUMENT_ROOT'])) {
+                    $relativeToDocRoot = str_replace($_SERVER['DOCUMENT_ROOT'], '', $parts[0] . '/public');
+                    $basePath = $relativeToDocRoot ?: '/public';
+                } else {
+                    $basePath = '/public';
+                }
+            } else {
+                $basePath = '';
+            }
+        }
+        
+        // Ensure basePath is properly formatted
+        if ($basePath !== '' && $basePath !== '/') {
+            $basePath = rtrim($basePath, '/');
         }
     }
     return $basePath;
 }
 
 function redirect($url) {
-    // If URL is absolute (starts with /), prepend base path if needed
+    // If url() already returned an absolute URL, use it directly
+    if (strpos($url, 'http://') === 0 || strpos($url, 'https://') === 0) {
+        header("Location: $url");
+        exit;
+    }
+    
+    // Handle relative URLs (starting with /)
     if (strpos($url, '/') === 0) {
         $basePath = getBasePath();
+        
         // Only add base path if it's not already in the URL
-        if ($basePath !== '/' && strpos($url, $basePath) !== 0) {
+        if ($basePath !== '/' && $basePath !== '' && strpos($url, $basePath) !== 0) {
             $url = $basePath . $url;
         }
+    } else {
+        // Relative path without leading slash - prepend base path
+        $basePath = getBasePath();
+        if ($basePath !== '' && $basePath !== '/') {
+            $url = $basePath . '/' . ltrim($url, '/');
+        } else {
+            $url = '/' . ltrim($url, '/');
+        }
     }
-    header("Location: $url");
+    
+    // Use absolute URL if possible (better for cPanel and prevents 404s)
+    if (!empty($_SERVER['HTTP_HOST'])) {
+        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+        $absoluteUrl = $protocol . $_SERVER['HTTP_HOST'] . $url;
+        header("Location: $absoluteUrl");
+    } else {
+        header("Location: $url");
+    }
     exit;
 }
 
@@ -229,5 +306,13 @@ function url($path = '') {
     // Ensure basePath doesn't have trailing slash (we'll add it)
     $basePath = rtrim($basePath, '/');
     
-    return $basePath . '/' . $path;
+    $fullPath = $basePath . '/' . $path;
+    
+    // Return absolute URL if we have HTTP_HOST (better for cPanel)
+    if (!empty($_SERVER['HTTP_HOST']) && (strpos($fullPath, 'http://') !== 0 && strpos($fullPath, 'https://') !== 0)) {
+        $protocol = (!empty($_SERVER['HTTPS']) && $_SERVER['HTTPS'] !== 'off') ? 'https://' : 'http://';
+        return $protocol . $_SERVER['HTTP_HOST'] . $fullPath;
+    }
+    
+    return $fullPath;
 }

@@ -37,6 +37,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         
         if (empty($errors)) {
             if (Auth::login($validEmail, $password)) {
+                // Check if there's a stored redirect destination (from expired session)
+                if (!empty($_SESSION['redirect_after_login'])) {
+                    $redirectUrl = $_SESSION['redirect_after_login'];
+                    unset($_SESSION['redirect_after_login']);
+                    redirect($redirectUrl);
+                }
+                
+                // Default redirect based on role
                 $role = Auth::userRole();
                 if ($role === 'customer') {
                     redirect(url('dashboard.php'));
