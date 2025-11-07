@@ -121,7 +121,7 @@ class Auth {
         }
     }
     
-    private static function logActivity($userId, $action, $description = null) {
+    public static function logActivity($userId, $action, $description = null) {
         try {
             $db = Database::getInstance()->getConnection();
             $sql = "INSERT INTO activity_logs (user_id, action, description, ip_address) 
