@@ -30,10 +30,17 @@ class Security {
     }
     
     /**
+     * Sanitize email input (trim and basic sanitization)
+     */
+    public static function sanitizeEmail($email) {
+        return filter_var(trim($email ?? ''), FILTER_SANITIZE_EMAIL);
+    }
+    
+    /**
      * Validate and sanitize email
      */
     public static function validateEmail($email) {
-        $email = filter_var(trim($email), FILTER_SANITIZE_EMAIL);
+        $email = self::sanitizeEmail($email);
         return filter_var($email, FILTER_VALIDATE_EMAIL) ? $email : false;
     }
     

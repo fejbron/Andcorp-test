@@ -117,7 +117,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                         </div>
                         
                         <div class="mb-3">
-                            <label for="password" class="form-label">Password</label>
+                            <div class="d-flex justify-content-between align-items-center mb-2">
+                                <label for="password" class="form-label mb-0">Password</label>
+                                <a href="<?php echo url('forgot-password.php'); ?>" class="text-decoration-none small">
+                                    Forgot Password?
+                                </a>
+                            </div>
                             <input type="password" class="form-control <?php echo hasError('password') ? 'is-invalid' : ''; ?>" 
                                    id="password" name="password" required>
                             <?php if (error('password')): ?>

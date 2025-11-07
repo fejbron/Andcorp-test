@@ -1,0 +1,211 @@
+<?php
+require_once '../bootstrap.php';
+
+// Redirect if already logged in
+if (Auth::check()) {
+    redirect(url('dashboard.php'));
+}
+
+Security::generateToken();
+
+$token = Security::sanitizeString($_GET['token'] ?? '', 64);
+$tokenValid = false;
+$tokenError = null;
+$user = null;
+
+// Validate token
+if (empty($token)) {
+    $tokenError = 'Invalid or missing reset token.';
+} else {
+    try {
+        $db = Database::getInstance()->getConnection();
+        
+        // Check if token exists and is valid
+        $stmt = $db->prepare("
+            SELECT pr.*, u.email, u.first_name, u.last_name 
+            FROM password_resets pr
+            JOIN users u ON pr.user_id = u.id
+            WHERE pr.token = ? AND pr.used = 0 AND pr.expires_at > NOW()
+        ");
+        $stmt->execute([$token]);
+        $resetData = $stmt->fetch(PDO::FETCH_ASSOC);
+        
+        if ($resetData) {
+            $tokenValid = true;
+            $user = $resetData;
+        } else {
+            // Check if token was used or expired
+            $checkStmt = $db->prepare("SELECT used, expires_at FROM password_resets WHERE token = ?");
+            $checkStmt->execute([$token]);
+            $tokenInfo = $checkStmt->fetch(PDO::FETCH_ASSOC);
+            
+            if ($tokenInfo) {
+                if ($tokenInfo['used'] == 1) {
+                    $tokenError = 'This password reset link has already been used. Please request a new one.';
+                } elseif (strtotime($tokenInfo['expires_at']) < time()) {
+                    $tokenError = 'This password reset link has expired. Please request a new one.';
+                }
+            } else {
+                $tokenError = 'Invalid password reset link.';
+            }
+        }
+    } catch (PDOException $e) {
+        error_log("Token validation error: " . $e->getMessage());
+        $tokenError = 'An error occurred. Please try again.';
+    }
+}
+
+// Handle password reset
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && $tokenValid) {
+    // CSRF protection
+    if (!isset($_POST['csrf_token']) || !Security::verifyToken($_POST['csrf_token'])) {
+        setErrors(['general' => 'Invalid security token. Please try again.']);
+        redirect(url('reset-password.php?token=' . $token));
+    }
+
+    $password = $_POST['password'] ?? '';
+    $passwordConfirm = $_POST['password_confirm'] ?? '';
+    $errors = [];
+
+    // Validate password
+    if (empty($password)) {
+        $errors['password'] = 'Password is required.';
+    } elseif (strlen($password) < 8) {
+        $errors['password'] = 'Password must be at least 8 characters long.';
+    } elseif ($password !== $passwordConfirm) {
+        $errors['password_confirm'] = 'Passwords do not match.';
+    }
+
+    if (empty($errors)) {
+        try {
+            $db = Database::getInstance()->getConnection();
+            $db->beginTransaction();
+            
+            // Update user password
+            $hashedPassword = password_hash($password, PASSWORD_DEFAULT);
+            $updateStmt = $db->prepare("UPDATE users SET password = ? WHERE id = ?");
+            $updateStmt->execute([$hashedPassword, $user['user_id']]);
+            
+            // Mark token as used
+            $markUsedStmt = $db->prepare("UPDATE password_resets SET used = 1 WHERE token = ?");
+            $markUsedStmt->execute([$token]);
+            
+            $db->commit();
+            
+            // Log activity
+            Auth::logActivity($user['user_id'], 'password_reset', 'Password reset completed');
+            
+            error_log("Password reset successful for user ID {$user['user_id']}");
+            
+            setSuccess('Your password has been reset successfully. You can now log in with your new password.');
+            redirect(url('login.php'));
+            
+        } catch (PDOException $e) {
+            $db->rollBack();
+            error_log("Password reset error: " . $e->getMessage());
+            $errors['general'] = 'An error occurred while resetting your password. Please try again.';
+        }
+    }
+    
+    if (!empty($errors)) {
+        setErrors($errors);
+    }
+}
+
+$title = "Reset Password";
+?>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <?php include '../includes/head.php'; ?>
+    <title><?php echo htmlspecialchars($title); ?> - Andcorp Autos</title>
+</head>
+<body>
+    <div class="auth-container">
+        <div class="auth-card">
+            <div class="text-center mb-4">
+                <img src="<?php echo url('assets/images/logo.png'); ?>" alt="Andcorp Autos" class="auth-logo">
+                <h1 class="h3 mb-2">Reset Your Password</h1>
+                <?php if ($tokenValid): ?>
+                    <p class="text-muted">Enter your new password below.</p>
+                <?php endif; ?>
+            </div>
+
+            <?php if ($tokenError): ?>
+                <div class="alert alert-danger">
+                    <i class="bi bi-exclamation-triangle"></i> <?php echo htmlspecialchars($tokenError); ?>
+                </div>
+                <div class="text-center">
+                    <a href="<?php echo url('forgot-password.php'); ?>" class="btn btn-primary">
+                        <i class="bi bi-arrow-clockwise"></i> Request New Reset Link
+                    </a>
+                    <div class="mt-3">
+                        <a href="<?php echo url('login.php'); ?>" class="text-decoration-none">
+                            <i class="bi bi-arrow-left"></i> Back to Login
+                        </a>
+                    </div>
+                </div>
+            <?php elseif ($tokenValid): ?>
+                <?php if ($generalError = error('general')): ?>
+                    <div class="alert alert-danger alert-dismissible fade show">
+                        <i class="bi bi-exclamation-triangle"></i> <?php echo $generalError; ?>
+                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                    </div>
+                <?php endif; ?>
+
+                <div class="alert alert-info mb-3">
+                    <i class="bi bi-info-circle"></i> Resetting password for: <strong><?php echo htmlspecialchars($user['email']); ?></strong>
+                </div>
+
+                <form action="<?php echo htmlspecialchars(url('reset-password.php?token=' . $token)); ?>" method="POST">
+                    <?php echo Security::csrfField(); ?>
+
+                    <div class="mb-3">
+                        <label for="password" class="form-label">New Password</label>
+                        <input type="password" 
+                               class="form-control <?php echo error('password') ? 'is-invalid' : ''; ?>" 
+                               id="password" 
+                               name="password" 
+                               placeholder="Enter new password (min. 8 characters)"
+                               minlength="8"
+                               required>
+                        <?php if (error('password')): ?>
+                            <div class="invalid-feedback"><?php echo error('password'); ?></div>
+                        <?php else: ?>
+                            <div class="form-text">Password must be at least 8 characters long.</div>
+                        <?php endif; ?>
+                    </div>
+
+                    <div class="mb-3">
+                        <label for="password_confirm" class="form-label">Confirm New Password</label>
+                        <input type="password" 
+                               class="form-control <?php echo error('password_confirm') ? 'is-invalid' : ''; ?>" 
+                               id="password_confirm" 
+                               name="password_confirm" 
+                               placeholder="Re-enter new password"
+                               minlength="8"
+                               required>
+                        <?php if (error('password_confirm')): ?>
+                            <div class="invalid-feedback"><?php echo error('password_confirm'); ?></div>
+                        <?php endif; ?>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary w-100 mb-3">
+                        <i class="bi bi-shield-check"></i> Reset Password
+                    </button>
+
+                    <div class="text-center">
+                        <a href="<?php echo url('login.php'); ?>" class="text-decoration-none">
+                            <i class="bi bi-arrow-left"></i> Back to Login
+                        </a>
+                    </div>
+                </form>
+            <?php endif; ?>
+        </div>
+    </div>
+
+    <?php clearErrors(); clearOld(); ?>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
+
