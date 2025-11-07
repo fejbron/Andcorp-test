@@ -4,6 +4,27 @@ Auth::requireStaff();
 
 $quoteRequestModel = new QuoteRequest();
 
+// Handle delete request (admin only)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_quote_request']) && Auth::isAdmin()) {
+    if (!isset($_POST['csrf_token']) || !Security::verifyToken($_POST['csrf_token'])) {
+        setErrors(['general' => 'Invalid security token']);
+    } else {
+        $quoteRequestId = Security::sanitizeInt($_POST['quote_request_id'] ?? 0);
+        if ($quoteRequestId > 0) {
+            try {
+                if ($quoteRequestModel->delete($quoteRequestId)) {
+                    setSuccess('Quote request deleted successfully');
+                } else {
+                    setErrors(['general' => 'Failed to delete quote request']);
+                }
+            } catch (Exception $e) {
+                setErrors(['general' => 'Error deleting quote request: ' . $e->getMessage()]);
+            }
+        }
+    }
+    redirect(url('admin/quote-requests.php'));
+}
+
 // Get filter parameters
 $statusFilter = Security::sanitizeString($_GET['status'] ?? '', 20);
 $searchQuery = Security::sanitizeString($_GET['search'] ?? '', 255);
@@ -273,6 +294,13 @@ $title = "Quote Requests Management";
                                                                 </a>
                                                             <?php endif; ?>
                                                         <?php endif; ?>
+                                                        <?php if (Auth::isAdmin() && empty($request['order_id'])): ?>
+                                                            <button type="button" class="btn btn-outline-danger" 
+                                                                    onclick="confirmDelete(<?php echo $viewId; ?>, '<?php echo htmlspecialchars($request['request_number'] ?? 'this request', ENT_QUOTES); ?>')" 
+                                                                    title="Delete">
+                                                                <i class="bi bi-trash"></i>
+                                                            </button>
+                                                        <?php endif; ?>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -287,7 +315,22 @@ $title = "Quote Requests Management";
         </div>
     </div>
 
+    <!-- Delete Form -->
+    <form id="deleteForm" method="POST" style="display: none;">
+        <?php echo Security::csrfField(); ?>
+        <input type="hidden" name="delete_quote_request" value="1">
+        <input type="hidden" name="quote_request_id" id="deleteQuoteRequestId">
+    </form>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function confirmDelete(requestId, requestNumber) {
+            if (confirm(`Are you sure you want to delete quote request "${requestNumber}"?\n\nThis action cannot be undone and will permanently remove the quote request.\n\nNote: Quote requests that have been converted to orders cannot be deleted.\n\nConfirm deletion?`)) {
+                document.getElementById('deleteQuoteRequestId').value = requestId;
+                document.getElementById('deleteForm').submit();
+            }
+        }
+    </script>
 </body>
 </html>
 

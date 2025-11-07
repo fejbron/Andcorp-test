@@ -20,6 +20,24 @@ if (!$deposit) {
     exit;
 }
 
+// Handle delete request (admin only)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_deposit']) && Auth::isAdmin()) {
+    if (!isset($_POST['csrf_token']) || !Security::verifyToken($_POST['csrf_token'])) {
+        setErrors(['general' => 'Invalid security token']);
+    } else {
+        try {
+            if ($depositModel->delete($depositId)) {
+                setSuccess('Deposit deleted successfully');
+                redirect(url('admin/deposits.php'));
+            } else {
+                setErrors(['general' => 'Failed to delete deposit']);
+            }
+        } catch (Exception $e) {
+            setErrors(['general' => 'Error deleting deposit: ' . $e->getMessage()]);
+        }
+    }
+}
+
 // Handle status updates
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['action'])) {
     // CSRF protection
@@ -93,6 +111,11 @@ $pageTitle = "Deposit Details #" . $depositId;
                             <a href="<?php echo url('admin/deposits.php'); ?>" class="btn btn-secondary btn-modern">
                                 <i class="bi bi-arrow-left"></i> Back to Deposits
                             </a>
+                            <?php if (Auth::isAdmin()): ?>
+                                <button type="button" class="btn btn-danger btn-modern ms-2" onclick="confirmDelete()">
+                                    <i class="bi bi-trash"></i> Delete Deposit
+                                </button>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
@@ -448,7 +471,20 @@ $pageTitle = "Deposit Details #" . $depositId;
         </div>
     </div>
 
+    <!-- Delete Form -->
+    <form id="deleteForm" method="POST" style="display: none;">
+        <?php echo Security::csrfField(); ?>
+        <input type="hidden" name="delete_deposit" value="1">
+    </form>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function confirmDelete() {
+            if (confirm('Are you sure you want to delete this deposit?\n\nThis action cannot be undone and will:\n- Remove the deposit record permanently\n- Update the order\'s financial summary\n\nConfirm deletion?')) {
+                document.getElementById('deleteForm').submit();
+            }
+        }
+    </script>
 </body>
 </html>
 

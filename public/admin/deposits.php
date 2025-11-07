@@ -4,6 +4,27 @@ Auth::requireStaff();
 
 $depositModel = new Deposit();
 
+// Handle delete request (admin only)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_deposit']) && Auth::isAdmin()) {
+    if (!isset($_POST['csrf_token']) || !Security::verifyToken($_POST['csrf_token'])) {
+        setErrors(['general' => 'Invalid security token']);
+    } else {
+        $depositId = Security::sanitizeInt($_POST['deposit_id'] ?? 0);
+        if ($depositId > 0) {
+            try {
+                if ($depositModel->delete($depositId)) {
+                    setSuccess('Deposit deleted successfully');
+                } else {
+                    setErrors(['general' => 'Failed to delete deposit']);
+                }
+            } catch (Exception $e) {
+                setErrors(['general' => 'Error deleting deposit: ' . $e->getMessage()]);
+            }
+        }
+    }
+    redirect(url('admin/deposits.php'));
+}
+
 // Get filter parameters
 $statusFilter = !empty($_GET['status']) ? $_GET['status'] : null;
 $searchQuery = Security::sanitizeString($_GET['search'] ?? '', 255);
@@ -217,6 +238,13 @@ $title = "Deposit Management";
                                                                 <i class="bi bi-check-circle"></i>
                                                             </a>
                                                         <?php endif; ?>
+                                                        <?php if (Auth::isAdmin()): ?>
+                                                            <button type="button" class="btn btn-outline-danger" 
+                                                                    onclick="confirmDelete(<?php echo $deposit['id']; ?>, '<?php echo htmlspecialchars($deposit['reference_number'] ?? 'this deposit', ENT_QUOTES); ?>')" 
+                                                                    title="Delete">
+                                                                <i class="bi bi-trash"></i>
+                                                            </button>
+                                                        <?php endif; ?>
                                                     </div>
                                                 </td>
                                             </tr>
@@ -231,7 +259,22 @@ $title = "Deposit Management";
         </div>
     </div>
 
+    <!-- Delete Form -->
+    <form id="deleteForm" method="POST" style="display: none;">
+        <?php echo Security::csrfField(); ?>
+        <input type="hidden" name="delete_deposit" value="1">
+        <input type="hidden" name="deposit_id" id="deleteDepositId">
+    </form>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function confirmDelete(depositId, depositRef) {
+            if (confirm(`Are you sure you want to delete deposit "${depositRef}"?\n\nThis action cannot be undone and will:\n- Remove the deposit record\n- Update the order's financial summary\n\nConfirm deletion?`)) {
+                document.getElementById('deleteDepositId').value = depositId;
+                document.getElementById('deleteForm').submit();
+            }
+        }
+    </script>
 </body>
 </html>
 

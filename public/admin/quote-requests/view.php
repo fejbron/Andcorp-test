@@ -122,6 +122,24 @@ try {
     redirect(url('admin/quote-requests.php'));
 }
 
+// Handle delete request (admin only)
+if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['delete_quote_request']) && Auth::isAdmin()) {
+    if (!isset($_POST['csrf_token']) || !Security::verifyToken($_POST['csrf_token'])) {
+        setErrors(['general' => 'Invalid security token']);
+    } else {
+        try {
+            if ($quoteRequestModel->delete($requestId)) {
+                setSuccess('Quote request deleted successfully');
+                redirect(url('admin/quote-requests.php'));
+            } else {
+                setErrors(['general' => 'Failed to delete quote request']);
+            }
+        } catch (Exception $e) {
+            setErrors(['general' => 'Error deleting quote request: ' . $e->getMessage()]);
+        }
+    }
+}
+
 // Handle quote submission
 if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_POST['add_quote'])) {
     // CSRF protection
@@ -293,6 +311,11 @@ $title = "Quote Request #" . ($request['request_number'] ?? 'N/A');
                             <a href="<?php echo url('admin/quote-requests.php'); ?>" class="btn btn-secondary btn-modern">
                                 <i class="bi bi-arrow-left"></i> Back to Requests
                             </a>
+                            <?php if (Auth::isAdmin() && empty($request['order_id'])): ?>
+                                <button type="button" class="btn btn-danger btn-modern ms-2" onclick="confirmDelete()">
+                                    <i class="bi bi-trash"></i> Delete Request
+                                </button>
+                            <?php endif; ?>
                         </div>
                     </div>
                 </div>
@@ -630,6 +653,20 @@ $title = "Quote Request #" . ($request['request_number'] ?? 'N/A');
             
             // You can display this total if needed
             console.log('Total Estimate: GHS ' + total.toFixed(2));
+        }
+    </script>
+    
+    <!-- Delete Form -->
+    <form id="deleteForm" method="POST" style="display: none;">
+        <?php echo Security::csrfField(); ?>
+        <input type="hidden" name="delete_quote_request" value="1">
+    </form>
+    
+    <script>
+        function confirmDelete() {
+            if (confirm('Are you sure you want to delete this quote request?\n\nThis action cannot be undone and will permanently remove the quote request.\n\nNote: Quote requests that have been converted to orders cannot be deleted.\n\nConfirm deletion?')) {
+                document.getElementById('deleteForm').submit();
+            }
         }
     </script>
 </body>
