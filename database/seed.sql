@@ -1,8 +1,8 @@
 -- Sample data for testing
 -- Insert default admin user (password: admin123 - hashed with bcrypt)
 INSERT INTO users (email, password, role, first_name, last_name, phone) VALUES
-('admin@andcorp.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'admin', 'Admin', 'User', '+233123456789'),
-('staff@andcorp.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'staff', 'Staff', 'Member', '+233123456788'),
+('admin@example.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'admin', 'Admin', 'User', '+233123456789'),
+('staff@example.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'staff', 'Staff', 'Member', '+233123456788'),
 ('customer@example.com', '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', 'customer', 'John', 'Doe', '+233123456787');
 
 -- Insert sample customer
