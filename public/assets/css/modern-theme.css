@@ -944,3 +944,44 @@ h1, h2, h3, h4, h5, h6 {
         box-shadow: none;
     }
 }
+
+/* Authentication Pages (Login, Register, Forgot Password, Reset Password) */
+.auth-container {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    padding: 2rem;
+    background: var(--bg-light);
+}
+
+.auth-card {
+    max-width: 450px;
+    width: 100%;
+    background: white;
+    border-radius: 12px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    padding: 2.5rem;
+}
+
+.auth-logo {
+    max-width: 200px;
+    width: 100%;
+    height: auto;
+    margin-bottom: 1rem;
+}
+
+@media (max-width: 576px) {
+    .auth-container {
+        padding: 1rem;
+    }
+    
+    .auth-card {
+        padding: 1.5rem;
+    }
+    
+    .auth-logo {
+        max-width: 150px;
+    }
+}

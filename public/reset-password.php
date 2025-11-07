@@ -1,5 +1,5 @@
 <?php
-require_once '../bootstrap.php';
+require_once 'bootstrap.php';
 
 // Redirect if already logged in
 if (Auth::check()) {
@@ -92,8 +92,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $tokenValid) {
             
             $db->commit();
             
-            // Log activity
-            Auth::logActivity($user['user_id'], 'password_reset', 'Password reset completed');
+            // Log activity (non-critical, don't fail if this errors)
+            try {
+                Auth::logActivity($user['user_id'], 'password_reset', 'Password reset completed');
+            } catch (Exception $logError) {
+                error_log("Failed to log password reset activity: " . $logError->getMessage());
+            }
             
             error_log("Password reset successful for user ID {$user['user_id']}");
             
@@ -101,9 +105,19 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && $tokenValid) {
             redirect(url('login.php'));
             
         } catch (PDOException $e) {
-            $db->rollBack();
-            error_log("Password reset error: " . $e->getMessage());
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            error_log("Password reset PDO error: " . $e->getMessage());
+            error_log("Password reset error trace: " . $e->getTraceAsString());
             $errors['general'] = 'An error occurred while resetting your password. Please try again.';
+        } catch (Exception $e) {
+            if ($db->inTransaction()) {
+                $db->rollBack();
+            }
+            error_log("Password reset general error: " . $e->getMessage());
+            error_log("Password reset error trace: " . $e->getTraceAsString());
+            $errors['general'] = 'An unexpected error occurred. Please try again or contact support.';
         }
     }
     
@@ -117,90 +131,111 @@ $title = "Reset Password";
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <?php include '../includes/head.php'; ?>
+    <?php include 'includes/head.php'; ?>
     <title><?php echo htmlspecialchars($title); ?> - Andcorp Autos</title>
+    <style>
+        body {
+            background: var(--bg-light);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+        }
+        .auth-page-card {
+            max-width: 450px;
+            margin: 0 auto;
+        }
+    </style>
 </head>
 <body>
-    <div class="auth-container">
-        <div class="auth-card">
-            <div class="text-center mb-4">
-                <img src="<?php echo url('assets/images/logo.png'); ?>" alt="Andcorp Autos" class="auth-logo">
-                <h1 class="h3 mb-2">Reset Your Password</h1>
-                <?php if ($tokenValid): ?>
-                    <p class="text-muted">Enter your new password below.</p>
-                <?php endif; ?>
+    <div class="container">
+        <div class="auth-page-card">
+            <div class="card-modern">
+                <div class="card-body p-5">
+                    <div class="text-center mb-4">
+                        <img src="<?php echo url('assets/images/logo.png'); ?>" alt="Andcorp Autos" style="max-width: 200px; width: 100%; height: auto; margin-bottom: 1rem;">
+                        <h2 class="mt-3">Reset Your Password</h2>
+                        <?php if ($tokenValid): ?>
+                            <p class="text-muted">Enter your new password below.</p>
+                        <?php endif; ?>
+                    </div>
+
+                    <?php if ($tokenError): ?>
+                        <div class="alert alert-danger">
+                            <i class="bi bi-exclamation-triangle"></i> <?php echo htmlspecialchars($tokenError); ?>
+                        </div>
+                        <div class="text-center">
+                            <a href="<?php echo url('forgot-password.php'); ?>" class="btn btn-primary mb-3">
+                                <i class="bi bi-arrow-clockwise"></i> Request New Reset Link
+                            </a>
+                            <hr class="my-4">
+                            <p class="mb-0">
+                                <a href="<?php echo url('login.php'); ?>" class="text-decoration-none">
+                                    <i class="bi bi-arrow-left"></i> Back to Login
+                                </a>
+                            </p>
+                        </div>
+                    <?php elseif ($tokenValid): ?>
+                        <?php if ($generalError = error('general')): ?>
+                            <div class="alert alert-danger alert-dismissible fade show">
+                                <i class="bi bi-exclamation-triangle"></i> <?php echo $generalError; ?>
+                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                            </div>
+                        <?php endif; ?>
+
+                        <div class="alert alert-info mb-3">
+                            <i class="bi bi-info-circle"></i> Resetting password for: <strong><?php echo htmlspecialchars($user['email']); ?></strong>
+                        </div>
+
+                        <form action="<?php echo htmlspecialchars(url('reset-password.php?token=' . $token)); ?>" method="POST">
+                            <?php echo Security::csrfField(); ?>
+
+                            <div class="mb-3">
+                                <label for="password" class="form-label">New Password</label>
+                                <input type="password" 
+                                       class="form-control <?php echo error('password') ? 'is-invalid' : ''; ?>" 
+                                       id="password" 
+                                       name="password" 
+                                       placeholder="Enter new password (min. 8 characters)"
+                                       minlength="8"
+                                       required>
+                                <?php if (error('password')): ?>
+                                    <div class="invalid-feedback"><?php echo error('password'); ?></div>
+                                <?php else: ?>
+                                    <div class="form-text">Password must be at least 8 characters long.</div>
+                                <?php endif; ?>
+                            </div>
+
+                            <div class="mb-3">
+                                <label for="password_confirm" class="form-label">Confirm New Password</label>
+                                <input type="password" 
+                                       class="form-control <?php echo error('password_confirm') ? 'is-invalid' : ''; ?>" 
+                                       id="password_confirm" 
+                                       name="password_confirm" 
+                                       placeholder="Re-enter new password"
+                                       minlength="8"
+                                       required>
+                                <?php if (error('password_confirm')): ?>
+                                    <div class="invalid-feedback"><?php echo error('password_confirm'); ?></div>
+                                <?php endif; ?>
+                            </div>
+
+                            <button type="submit" class="btn btn-primary w-100 py-2 mb-3">
+                                <i class="bi bi-shield-check"></i> Reset Password
+                            </button>
+
+                            <hr class="my-4">
+
+                            <div class="text-center">
+                                <p class="mb-0">
+                                    <a href="<?php echo url('login.php'); ?>" class="text-decoration-none">
+                                        <i class="bi bi-arrow-left"></i> Back to Login
+                                    </a>
+                                </p>
+                            </div>
+                        </form>
+                    <?php endif; ?>
+                </div>
             </div>
-
-            <?php if ($tokenError): ?>
-                <div class="alert alert-danger">
-                    <i class="bi bi-exclamation-triangle"></i> <?php echo htmlspecialchars($tokenError); ?>
-                </div>
-                <div class="text-center">
-                    <a href="<?php echo url('forgot-password.php'); ?>" class="btn btn-primary">
-                        <i class="bi bi-arrow-clockwise"></i> Request New Reset Link
-                    </a>
-                    <div class="mt-3">
-                        <a href="<?php echo url('login.php'); ?>" class="text-decoration-none">
-                            <i class="bi bi-arrow-left"></i> Back to Login
-                        </a>
-                    </div>
-                </div>
-            <?php elseif ($tokenValid): ?>
-                <?php if ($generalError = error('general')): ?>
-                    <div class="alert alert-danger alert-dismissible fade show">
-                        <i class="bi bi-exclamation-triangle"></i> <?php echo $generalError; ?>
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
-                <?php endif; ?>
-
-                <div class="alert alert-info mb-3">
-                    <i class="bi bi-info-circle"></i> Resetting password for: <strong><?php echo htmlspecialchars($user['email']); ?></strong>
-                </div>
-
-                <form action="<?php echo htmlspecialchars(url('reset-password.php?token=' . $token)); ?>" method="POST">
-                    <?php echo Security::csrfField(); ?>
-
-                    <div class="mb-3">
-                        <label for="password" class="form-label">New Password</label>
-                        <input type="password" 
-                               class="form-control <?php echo error('password') ? 'is-invalid' : ''; ?>" 
-                               id="password" 
-                               name="password" 
-                               placeholder="Enter new password (min. 8 characters)"
-                               minlength="8"
-                               required>
-                        <?php if (error('password')): ?>
-                            <div class="invalid-feedback"><?php echo error('password'); ?></div>
-                        <?php else: ?>
-                            <div class="form-text">Password must be at least 8 characters long.</div>
-                        <?php endif; ?>
-                    </div>
-
-                    <div class="mb-3">
-                        <label for="password_confirm" class="form-label">Confirm New Password</label>
-                        <input type="password" 
-                               class="form-control <?php echo error('password_confirm') ? 'is-invalid' : ''; ?>" 
-                               id="password_confirm" 
-                               name="password_confirm" 
-                               placeholder="Re-enter new password"
-                               minlength="8"
-                               required>
-                        <?php if (error('password_confirm')): ?>
-                            <div class="invalid-feedback"><?php echo error('password_confirm'); ?></div>
-                        <?php endif; ?>
-                    </div>
-
-                    <button type="submit" class="btn btn-primary w-100 mb-3">
-                        <i class="bi bi-shield-check"></i> Reset Password
-                    </button>
-
-                    <div class="text-center">
-                        <a href="<?php echo url('login.php'); ?>" class="text-decoration-none">
-                            <i class="bi bi-arrow-left"></i> Back to Login
-                        </a>
-                    </div>
-                </form>
-            <?php endif; ?>
         </div>
     </div>
 
