@@ -26,6 +26,22 @@ if (Auth::isCustomer()) {
 
 $vehicle = $vehicleModel->findByOrderId($orderId);
 
+// Get deposits and calculate current total
+$depositModel = new Deposit();
+$deposits = $depositModel->getByOrder($orderId);
+
+// Ensure the order's total_deposits is up to date
+$totalVerifiedDeposits = 0;
+foreach ($deposits as $dep) {
+    if ($dep['status'] === 'verified') {
+        $totalVerifiedDeposits += floatval($dep['amount']);
+    }
+}
+
+// Update the order display data with current verified deposits total
+$order['total_deposits'] = $totalVerifiedDeposits;
+$order['balance_due'] = $order['total_cost'] - $totalVerifiedDeposits;
+
 // Get all related data
 $db = Database::getInstance()->getConnection();
 
@@ -418,7 +434,7 @@ $payments = $paymentsStmt->fetchAll();
                             </tr>
                             <tr>
                                 <td>Deposit Paid:</td>
-                                <td class="text-end text-success"><strong><?php echo formatCurrency($order['deposit_amount'], $order['currency']); ?></strong></td>
+                                <td class="text-end text-success"><strong><?php echo formatCurrency($order['total_deposits'] ?? 0, $order['currency']); ?></strong></td>
                             </tr>
                             <tr class="table-warning">
                                 <td><strong>Balance Due:</strong></td>

@@ -20,6 +20,19 @@ $vehicle = $vehicleModel->findByOrderId($orderId);
 $depositModel = new Deposit();
 $deposits = $depositModel->getByOrder($orderId);
 
+// Ensure the order's total_deposits is up to date
+// Calculate total from verified deposits
+$totalVerifiedDeposits = 0;
+foreach ($deposits as $dep) {
+    if ($dep['status'] === 'verified') {
+        $totalVerifiedDeposits += floatval($dep['amount']);
+    }
+}
+
+// Update the order display data with current verified deposits total
+$order['total_deposits'] = $totalVerifiedDeposits;
+$order['balance_due'] = $order['total_cost'] - $totalVerifiedDeposits;
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     // CSRF protection
     if (!isset($_POST['csrf_token']) || !Security::verifyToken($_POST['csrf_token'])) {
