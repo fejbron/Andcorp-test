@@ -431,8 +431,33 @@ $payments = $paymentsStmt->fetchAll();
                     </div>
                     <div class="card-body">
                         <table class="table table-sm">
+                            <?php if (($order['discount_type'] ?? 'none') !== 'none' && ($order['discount_value'] ?? 0) > 0): ?>
                             <tr>
-                                <td>Total Cost:</td>
+                                <td>Subtotal:</td>
+                                <td class="text-end"><?php echo formatCurrency($order['subtotal'] ?? 0, $order['currency']); ?></td>
+                            </tr>
+                            <tr class="table-success">
+                                <td>
+                                    <i class="bi bi-tag-fill"></i> Discount 
+                                    <?php if ($order['discount_type'] === 'percentage'): ?>
+                                        (<?php echo $order['discount_value']; ?>%)
+                                    <?php endif; ?>:
+                                </td>
+                                <td class="text-end text-success">
+                                    <?php 
+                                    $discountAmt = 0;
+                                    if ($order['discount_type'] === 'fixed') {
+                                        $discountAmt = $order['discount_value'];
+                                    } elseif ($order['discount_type'] === 'percentage') {
+                                        $discountAmt = ($order['subtotal'] * $order['discount_value']) / 100;
+                                    }
+                                    echo '- ' . formatCurrency($discountAmt, $order['currency']);
+                                    ?>
+                                </td>
+                            </tr>
+                            <?php endif; ?>
+                            <tr class="table-light">
+                                <td><strong>Total Cost:</strong></td>
                                 <td class="text-end"><strong><?php echo formatCurrency($order['total_cost'], $order['currency']); ?></strong></td>
                             </tr>
                             <tr>

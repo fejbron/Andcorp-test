@@ -40,6 +40,9 @@ CREATE TABLE IF NOT EXISTS orders (
     total_cost DECIMAL(10, 2) DEFAULT 0.00,
     deposit_amount DECIMAL(10, 2) DEFAULT 0.00,
     balance_due DECIMAL(10, 2) DEFAULT 0.00,
+    discount_type ENUM('none', 'fixed', 'percentage') DEFAULT 'none',
+    discount_value DECIMAL(10, 2) DEFAULT 0.00,
+    subtotal DECIMAL(10, 2) DEFAULT 0.00,
     currency VARCHAR(10) DEFAULT 'GHS',
     notes TEXT,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -47,7 +50,8 @@ CREATE TABLE IF NOT EXISTS orders (
     FOREIGN KEY (customer_id) REFERENCES customers(id) ON DELETE CASCADE,
     INDEX idx_customer (customer_id),
     INDEX idx_status (status),
-    INDEX idx_order_number (order_number)
+    INDEX idx_order_number (order_number),
+    INDEX idx_discount_type (discount_type)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 -- Vehicles table

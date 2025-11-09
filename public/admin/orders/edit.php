@@ -56,7 +56,27 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $dutyCost = Security::sanitizeFloat($_POST['duty_cost'] ?? $order['duty_cost'] ?? 0, 0);
             $clearingCost = Security::sanitizeFloat($_POST['clearing_cost'] ?? $order['clearing_cost'] ?? 0, 0);
             $fixingCost = Security::sanitizeFloat($_POST['fixing_cost'] ?? $order['fixing_cost'] ?? 0, 0);
-            $totalUsd = $vehiclePurchasePrice + $carCost + $transportationCost + $dutyCost + $clearingCost + $fixingCost;
+            $subtotal = $vehiclePurchasePrice + $carCost + $transportationCost + $dutyCost + $clearingCost + $fixingCost;
+            
+            // Handle discount calculation
+            $discountType = Security::sanitizeString($_POST['discount_type'] ?? 'none', 20);
+            $discountValue = Security::sanitizeFloat($_POST['discount_value'] ?? 0, 0);
+            
+            // Validate discount type
+            if (!in_array($discountType, ['none', 'fixed', 'percentage'])) {
+                $discountType = 'none';
+            }
+            
+            // Calculate discount amount and total cost
+            $discountAmount = 0;
+            if ($discountType === 'fixed') {
+                $discountAmount = min($discountValue, $subtotal); // Discount cannot exceed subtotal
+            } elseif ($discountType === 'percentage') {
+                $discountValue = min(max($discountValue, 0), 100); // Percentage must be 0-100
+                $discountAmount = ($subtotal * $discountValue) / 100;
+            }
+            
+            $totalCost = max(0, $subtotal - $discountAmount);
             
             // Get current total_deposits (sum of all verified deposits)
             $depositModel = new Deposit();
@@ -68,12 +88,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 }
             }
             
-            // Update order
-            $totalCost = Security::sanitizeFloat($_POST['total_cost'] ?? 0, 0);
+            // Calculate balance due
             $balanceDue = $totalCost - $totalDeposits;
             
             $orderModel->update($orderId, [
                 'status' => Security::sanitizeStatus($_POST['status'] ?? $order['status']),
+                'subtotal' => $subtotal,
+                'discount_type' => $discountType,
+                'discount_value' => $discountValue,
                 'total_cost' => $totalCost,
                 'deposit_amount' => Security::sanitizeFloat($_POST['deposit_amount'] ?? 0, 0),
                 'total_deposits' => $totalDeposits,
@@ -85,7 +107,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'duty_cost' => $dutyCost,
                 'clearing_cost' => $clearingCost,
                 'fixing_cost' => $fixingCost,
-                'total_usd' => $totalUsd
+                'total_usd' => $subtotal // Store subtotal as total_usd for backward compatibility
             ]);
             
             // Update vehicle if exists
@@ -285,13 +307,56 @@ $vehicle = $vehicleModel->findByOrderId($orderId);
                                         </div>
                                     </div>
 
+                                    <!-- Discount Section -->
+                                    <h6 class="mt-4 mb-3">Discount (Optional)</h6>
+                                    <p class="text-muted small mb-3">Apply a discount to the order total</p>
+                                    
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label for="discount_type" class="form-label">Discount Type</label>
+                                            <select class="form-select" id="discount_type" name="discount_type">
+                                                <option value="none" <?php echo ($order['discount_type'] ?? 'none') === 'none' ? 'selected' : ''; ?>>No Discount</option>
+                                                <option value="fixed" <?php echo ($order['discount_type'] ?? 'none') === 'fixed' ? 'selected' : ''; ?>>Fixed Amount (GHS)</option>
+                                                <option value="percentage" <?php echo ($order['discount_type'] ?? 'none') === 'percentage' ? 'selected' : ''; ?>>Percentage (%)</option>
+                                            </select>
+                                        </div>
+
+                                        <div class="col-md-6 mb-3">
+                                            <label for="discount_value" class="form-label">Discount Value</label>
+                                            <input type="number" step="0.01" class="form-control" id="discount_value" 
+                                                   name="discount_value" value="<?php echo $order['discount_value'] ?? 0; ?>" 
+                                                   placeholder="0.00" min="0">
+                                            <small class="form-text text-muted" id="discount_help">
+                                                <?php 
+                                                $discountType = $order['discount_type'] ?? 'none';
+                                                echo $discountType === 'percentage' ? 'Enter percentage (0-100)' : 'Enter amount in GHS';
+                                                ?>
+                                            </small>
+                                        </div>
+                                    </div>
+
+                                    <!-- Cost Summary with Discount -->
                                     <div class="row">
                                         <div class="col-md-12 mb-3">
-                                            <div class="alert alert-info">
-                                                <i class="bi bi-calculator"></i> <strong>Total Cost (GHS):</strong> 
-                                                GHS <span id="total_usd_display"><?php echo number_format($order['total_usd'] ?? 0, 2); ?></span>
+                                            <div class="alert alert-light border">
+                                                <table class="table table-sm mb-0">
+                                                    <tr>
+                                                        <td><strong>Subtotal:</strong></td>
+                                                        <td class="text-end">GHS <span id="subtotal_display"><?php echo number_format($order['subtotal'] ?? $order['total_usd'] ?? 0, 2); ?></span></td>
+                                                    </tr>
+                                                    <tr id="discount_row" style="<?php echo ($order['discount_type'] ?? 'none') === 'none' ? 'display:none;' : ''; ?>">
+                                                        <td><strong>Discount:</strong></td>
+                                                        <td class="text-end text-danger">- GHS <span id="discount_display">0.00</span></td>
+                                                    </tr>
+                                                    <tr class="table-primary">
+                                                        <td><strong><i class="bi bi-calculator"></i> Total Cost:</strong></td>
+                                                        <td class="text-end"><strong>GHS <span id="total_cost_display"><?php echo number_format($order['total_cost'] ?? 0, 2); ?></span></strong></td>
+                                                    </tr>
+                                                </table>
                                                 <input type="hidden" id="total_usd" name="total_usd" value="<?php echo $order['total_usd'] ?? 0; ?>">
-                                                <small class="d-block mt-1 text-muted">This total will be used as the order's total cost</small>
+                                                <small class="d-block mt-2 text-muted">
+                                                    <i class="bi bi-info-circle"></i> Total cost is automatically calculated based on all costs and discount
+                                                </small>
                                             </div>
                                         </div>
                                     </div>
@@ -447,8 +512,28 @@ $vehicle = $vehicleModel->findByOrderId($orderId);
                             </div>
                             <div class="card-body">
                                 <table class="table table-sm mb-0">
+                                    <?php if (($order['discount_type'] ?? 'none') !== 'none' && ($order['discount_value'] ?? 0) > 0): ?>
                                     <tr>
-                                        <td>Total Cost:</td>
+                                        <td>Subtotal:</td>
+                                        <td class="text-end"><?php echo formatCurrency($order['subtotal'] ?? 0, 'GHS'); ?></td>
+                                    </tr>
+                                    <tr>
+                                        <td>Discount (<?php echo $order['discount_type'] === 'percentage' ? $order['discount_value'] . '%' : 'Fixed'; ?>):</td>
+                                        <td class="text-end text-danger">
+                                            <?php 
+                                            $discountAmt = 0;
+                                            if ($order['discount_type'] === 'fixed') {
+                                                $discountAmt = $order['discount_value'];
+                                            } elseif ($order['discount_type'] === 'percentage') {
+                                                $discountAmt = ($order['subtotal'] * $order['discount_value']) / 100;
+                                            }
+                                            echo '- ' . formatCurrency($discountAmt, 'GHS');
+                                            ?>
+                                        </td>
+                                    </tr>
+                                    <?php endif; ?>
+                                    <tr class="table-light">
+                                        <td><strong>Total Cost:</strong></td>
                                         <td class="text-end"><strong><?php echo formatCurrency($order['total_cost'], 'GHS'); ?></strong></td>
                                     </tr>
                                     <tr>
@@ -554,7 +639,7 @@ $vehicle = $vehicleModel->findByOrderId($orderId);
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
-        // Auto-calculate total USD from cost breakdown
+        // Auto-calculate total with discount from cost breakdown
         function calculateTotalUsd() {
             // Get vehicle purchase price (if exists)
             const vehiclePurchasePrice = <?php echo $vehicle && !empty($vehicle['purchase_price']) ? floatval($vehicle['purchase_price']) : 0; ?>;
@@ -565,17 +650,64 @@ $vehicle = $vehicleModel->findByOrderId($orderId);
             const clearingCost = parseFloat(document.getElementById('clearing_cost').value) || 0;
             const fixingCost = parseFloat(document.getElementById('fixing_cost').value) || 0;
             
-            const totalCost = vehiclePurchasePrice + carCost + transportationCost + dutyCost + clearingCost + fixingCost;
+            // Calculate subtotal
+            const subtotal = vehiclePurchasePrice + carCost + transportationCost + dutyCost + clearingCost + fixingCost;
             
-            // Update display
-            document.getElementById('total_usd_display').textContent = totalCost.toFixed(2);
-            document.getElementById('total_usd').value = totalCost.toFixed(2);
+            // Get discount details
+            const discountType = document.getElementById('discount_type').value;
+            const discountValue = parseFloat(document.getElementById('discount_value').value) || 0;
+            
+            // Calculate discount amount
+            let discountAmount = 0;
+            if (discountType === 'fixed') {
+                discountAmount = Math.min(discountValue, subtotal); // Discount cannot exceed subtotal
+            } else if (discountType === 'percentage') {
+                const percentage = Math.min(Math.max(discountValue, 0), 100); // Clamp between 0-100
+                discountAmount = (subtotal * percentage) / 100;
+            }
+            
+            // Calculate final total
+            const totalCost = Math.max(0, subtotal - discountAmount);
+            
+            // Update displays
+            document.getElementById('subtotal_display').textContent = subtotal.toFixed(2);
+            document.getElementById('discount_display').textContent = discountAmount.toFixed(2);
+            document.getElementById('total_cost_display').textContent = totalCost.toFixed(2);
+            document.getElementById('total_usd').value = subtotal.toFixed(2);
+            
+            // Show/hide discount row
+            const discountRow = document.getElementById('discount_row');
+            if (discountType === 'none' || discountAmount === 0) {
+                discountRow.style.display = 'none';
+            } else {
+                discountRow.style.display = '';
+            }
             
             // Auto-update the total_cost field in the Order Configuration section
             const totalCostInput = document.getElementById('total_cost');
             if (totalCostInput) {
                 totalCostInput.value = totalCost.toFixed(2);
             }
+        }
+        
+        // Update discount help text based on type
+        function updateDiscountHelp() {
+            const discountType = document.getElementById('discount_type').value;
+            const helpText = document.getElementById('discount_help');
+            const discountValueInput = document.getElementById('discount_value');
+            
+            if (discountType === 'percentage') {
+                helpText.textContent = 'Enter percentage (0-100)';
+                discountValueInput.setAttribute('max', '100');
+            } else if (discountType === 'fixed') {
+                helpText.textContent = 'Enter amount in GHS';
+                discountValueInput.removeAttribute('max');
+            } else {
+                helpText.textContent = 'No discount applied';
+                discountValueInput.value = '0';
+            }
+            
+            calculateTotalUsd();
         }
         
         // Attach event listeners to all cost breakdown fields
@@ -586,6 +718,11 @@ $vehicle = $vehicleModel->findByOrderId($orderId);
                 field.addEventListener('change', calculateTotalUsd);
             }
         });
+        
+        // Attach event listeners to discount fields
+        document.getElementById('discount_type').addEventListener('change', updateDiscountHelp);
+        document.getElementById('discount_value').addEventListener('input', calculateTotalUsd);
+        document.getElementById('discount_value').addEventListener('change', calculateTotalUsd);
         
         // Calculate total on page load
         calculateTotalUsd();
