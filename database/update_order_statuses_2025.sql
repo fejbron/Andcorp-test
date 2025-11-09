@@ -1,6 +1,6 @@
--- Fix orders.status ENUM to match the expected values
--- This updates the existing database table to include all required status values
--- NOTE: Values must be capitalized to match database/schema.sql and application code
+-- Update order statuses to include more detailed shipping tracking
+-- Migration date: November 2025
+-- This updates the orders.status ENUM to include new status stages
 
 ALTER TABLE orders 
 MODIFY COLUMN status ENUM(
@@ -24,4 +24,7 @@ FROM INFORMATION_SCHEMA.COLUMNS
 WHERE TABLE_SCHEMA = DATABASE() 
   AND TABLE_NAME = 'orders' 
   AND COLUMN_NAME = 'status';
+
+-- Show message
+SELECT 'Order statuses updated successfully!' AS message;
 

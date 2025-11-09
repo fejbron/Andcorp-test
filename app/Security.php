@@ -253,9 +253,9 @@ class Security {
      * Sanitize order status
      */
     public static function sanitizeStatus($status) {
-        // Normalize to capitalized format to match database ENUM
-        $status = ucfirst(strtolower(trim($status ?? '')));
-        $allowed = ['Pending', 'Purchased', 'Shipping', 'Customs', 'Inspection', 'Repair', 'Ready', 'Delivered', 'Cancelled'];
+        // Keep exact case as statuses may contain multiple words with specific capitalization
+        $status = trim($status ?? '');
+        $allowed = ['Pending', 'Purchased', 'Delivered to Port of Load', 'Origin customs clearance', 'Shipping', 'Arrived in Ghana', 'Ghana Customs Clearance', 'Inspection', 'Repair', 'Ready', 'Delivered', 'Cancelled'];
         return in_array($status, $allowed, true) ? $status : 'Pending';
     }
     

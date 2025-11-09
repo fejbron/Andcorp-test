@@ -87,13 +87,16 @@ A comprehensive web application for managing international car purchases from ma
 - **Complete Order Lifecycle**:
   1. **Pending**: Order created, awaiting vehicle purchase
   2. **Purchased**: Vehicle acquired from dealership
-  3. **Shipping**: En route to Ghana
-  4. **Customs**: Customs clearance in progress
-  5. **Inspection**: Vehicle inspection
-  6. **Repair**: Any necessary repairs
-  7. **Ready**: Ready for customer delivery
-  8. **Delivered**: Delivered to customer
-  9. **Cancelled**: Order cancelled
+  3. **Delivered to Port of Load**: Vehicle delivered to origin port
+  4. **Origin customs clearance**: Customs clearance at origin country
+  5. **Shipping**: En route to Ghana
+  6. **Arrived in Ghana**: Vehicle has arrived at Ghana port
+  7. **Ghana Customs Clearance**: Customs clearance in Ghana
+  8. **Inspection**: Vehicle inspection
+  9. **Repair**: Any necessary repairs
+  10. **Ready**: Ready for customer delivery
+  11. **Delivered**: Delivered to customer
+  12. **Cancelled**: Order cancelled
 
 - **Order Features**:
   - VIN tracking
@@ -509,32 +512,48 @@ Andcorp-test/
 - Purchase price added to costs
 - Customer notified
 
-### 4. Shipping
-- Status: **Shipping**
-- Tracking information added
-- Regular updates to customer
+### 4. Delivered to Port of Load
+- Status: **Delivered to Port of Load**
+- Vehicle transported to origin port
+- Documentation prepared for shipping
 
-### 5. Customs Clearance
-- Status: **Customs**
+### 5. Origin Customs Clearance
+- Status: **Origin customs clearance**
+- Export customs clearance at origin country
+- Export documentation processed
+
+### 6. Shipping
+- Status: **Shipping**
+- Vehicle en route to Ghana
+- Regular tracking updates to customer
+
+### 7. Arrived in Ghana
+- Status: **Arrived in Ghana**
+- Vehicle has arrived at Ghana port
+- Ready for customs clearance
+
+### 8. Ghana Customs Clearance
+- Status: **Ghana Customs Clearance**
 - Duty and clearing fees calculated
+- Import documentation processed
 - Customer pays any balance
 
-### 6. Vehicle Inspection
+### 9. Vehicle Inspection
 - Status: **Inspection**
 - Detailed inspection report uploaded
 - Photos added to order
 
-### 7. Repairs (if needed)
+### 10. Repairs (if needed)
 - Status: **Repair**
 - Shop updates provided
 - Repair costs tracked
 
-### 8. Ready for Delivery
+### 11. Ready for Delivery
 - Status: **Ready**
 - Customer notified
 - Delivery arranged
 
-### 9. Delivery
+### 12. Delivery
 - Status: **Delivered**
 - Evidence of delivery uploaded
 - Order complete
@@ -765,7 +784,7 @@ php -S localhost:8000 -t public/
 - **Database Tables**: 15+
 - **Features**: 50+
 - **User Roles**: 3
-- **Order Statuses**: 9
+- **Order Statuses**: 12
 - **Document Types**: 8
 - **Support Priority Levels**: 4
 

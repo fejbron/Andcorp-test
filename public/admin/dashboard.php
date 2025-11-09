@@ -28,6 +28,15 @@ $totalRevenue = $revenue['total_revenue'] ?? 0;
 // Get deposit statistics
 $depositModel = new Deposit();
 $depositStats = $depositModel->getStats();
+
+// Calculate pending balance from business report (balance_due from all non-cancelled orders)
+$pendingBalanceStmt = $db->query("
+    SELECT COALESCE(SUM(balance_due), 0) as pending_balance
+    FROM orders
+    WHERE status != 'Cancelled'
+");
+$pendingBalanceResult = $pendingBalanceStmt->fetch();
+$pendingBalance = $pendingBalanceResult['pending_balance'] ?? 0;
 ?>
 <!DOCTYPE html>
 <html lang="en">
@@ -94,10 +103,10 @@ $depositStats = $depositModel->getStats();
             <div class="col-md-3">
                 <div class="stat-card success animate-in">
                     <div class="stat-icon">
-                        <i class="bi bi-currency-dollar"></i>
+                        <i class="bi bi-cash-stack"></i>
                     </div>
                     <h3><?php echo formatCurrency($totalRevenue); ?></h3>
-                    <p>Total Sales</p>
+                    <p>Total Revenue</p>
                 </div>
             </div>
         </div>
@@ -127,8 +136,8 @@ $depositStats = $depositModel->getStats();
                     <div class="stat-icon">
                         <i class="bi bi-wallet2"></i>
                     </div>
-                    <h3><?php echo formatCurrency($depositStats['total_pending']); ?></h3>
-                    <p>Pending Amount</p>
+                    <h3><?php echo formatCurrency($pendingBalance); ?></h3>
+                    <p>Pending Balance</p>
                 </div>
             </div>
             <div class="col-md-3">
@@ -152,7 +161,7 @@ $depositStats = $depositModel->getStats();
                     <div class="card-body">
                         <div class="row text-center">
                             <?php
-                            $allStatuses = ['Pending', 'Purchased', 'Shipping', 'Customs', 'Inspection', 'Repair', 'Ready', 'Delivered'];
+                            $allStatuses = ['Pending', 'Purchased', 'Delivered to Port of Load', 'Origin customs clearance', 'Shipping', 'Arrived in Ghana', 'Ghana Customs Clearance', 'Inspection', 'Repair', 'Ready', 'Delivered'];
                             foreach ($allStatuses as $status):
                                 $count = $statusCounts[$status] ?? 0;
                                 $statusLower = strtolower($status);

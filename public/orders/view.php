@@ -150,12 +150,15 @@ $payments = $paymentsStmt->fetchAll();
             <div class="card-body">
                 <div class="timeline">
                     <?php
-                    $statuses = ['Pending', 'Purchased', 'Shipping', 'Customs', 'Inspection', 'Repair', 'Ready', 'Delivered'];
+                    $statuses = ['Pending', 'Purchased', 'Delivered to Port of Load', 'Origin customs clearance', 'Shipping', 'Arrived in Ghana', 'Ghana Customs Clearance', 'Inspection', 'Repair', 'Ready', 'Delivered'];
                     $statusLabels = [
                         'Pending' => 'Order Placed',
                         'Purchased' => 'Vehicle Purchased',
+                        'Delivered to Port of Load' => 'Delivered to Port of Load',
+                        'Origin customs clearance' => 'Origin Customs Clearance',
                         'Shipping' => 'Shipping to Ghana',
-                        'Customs' => 'Customs Clearance',
+                        'Arrived in Ghana' => 'Arrived in Ghana',
+                        'Ghana Customs Clearance' => 'Ghana Customs Clearance',
                         'Inspection' => 'Vehicle Inspection',
                         'Repair' => 'Repair & Preparation',
                         'Ready' => 'Ready for Delivery',

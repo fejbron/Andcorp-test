@@ -268,20 +268,21 @@ try {
                         <div class="row">
                             <?php 
                             $statuses = [
-                                'Pending' => 'Pending',
-                                'Purchased' => 'Purchased',
-                                'Shipping' => 'Shipping',
-                                'Customs' => 'Customs',
-                                'Inspection' => 'Inspection',
-                                'Repair' => 'Repair',
-                                'Ready' => 'Ready',
-                                'Delivered' => 'Delivered',
-                                'Cancelled' => 'Cancelled'
+                                'Pending' => 'pending',
+                                'Purchased' => 'purchased',
+                                'Delivered to Port of Load' => 'delivered_to_port_of_load',
+                                'Origin customs clearance' => 'origin_customs_clearance',
+                                'Shipping' => 'shipping',
+                                'Arrived in Ghana' => 'arrived_in_ghana',
+                                'Ghana Customs Clearance' => 'ghana_customs_clearance',
+                                'Inspection' => 'inspection',
+                                'Repair' => 'repair',
+                                'Ready' => 'ready',
+                                'Delivered' => 'delivered',
+                                'Cancelled' => 'cancelled'
                             ];
-                            $statusLower = '';
-                            foreach ($statuses as $label => $status): 
-                                $statusLower = strtolower($status);
-                                $key = 'email_status_' . $statusLower;
+                            foreach ($statuses as $label => $statusKey): 
+                                $key = 'email_status_' . $statusKey;
                             ?>
                                 <div class="col-md-4 mb-2">
                                     <div class="form-check form-switch">

@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS orders (
     id INT AUTO_INCREMENT PRIMARY KEY,
     customer_id INT NOT NULL,
     order_number VARCHAR(50) UNIQUE NOT NULL,
-    status ENUM('Pending', 'Purchased', 'Shipping', 'Customs', 'Inspection', 'Repair', 'Ready', 'Delivered', 'Cancelled') DEFAULT 'Pending',
+    status ENUM('Pending', 'Purchased', 'Delivered to Port of Load', 'Origin customs clearance', 'Shipping', 'Arrived in Ghana', 'Ghana Customs Clearance', 'Inspection', 'Repair', 'Ready', 'Delivered', 'Cancelled') DEFAULT 'Pending',
     total_cost DECIMAL(10, 2) DEFAULT 0.00,
     deposit_amount DECIMAL(10, 2) DEFAULT 0.00,
     balance_due DECIMAL(10, 2) DEFAULT 0.00,

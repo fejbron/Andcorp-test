@@ -27,7 +27,7 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
               ->range('year', $_POST['year'] ?? '', 1990, date('Y') + 1);
     
     if (!empty($_POST['status'])) {
-        $validator->in('status', $_POST['status'], ['Pending', 'Purchased', 'Shipping', 'Customs', 'Inspection', 'Repair', 'Ready', 'Delivered', 'Cancelled']);
+        $validator->in('status', $_POST['status'], ['Pending', 'Purchased', 'Delivered to Port of Load', 'Origin customs clearance', 'Shipping', 'Arrived in Ghana', 'Ghana Customs Clearance', 'Inspection', 'Repair', 'Ready', 'Delivered', 'Cancelled']);
     }
     
     $errors = $validator->getErrors();
@@ -172,11 +172,14 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 <div class="col-md-6 mb-3">
                                     <label for="status" class="form-label">Order Status</label>
                                     <select class="form-select" id="status" name="status">
-                                        <?php $selectedStatus = ucfirst(strtolower(old('status', 'Pending'))); ?>
+                                        <?php $selectedStatus = old('status', 'Pending'); ?>
                                         <option value="Pending" <?php echo $selectedStatus === 'Pending' ? 'selected' : ''; ?>>Pending</option>
                                         <option value="Purchased" <?php echo $selectedStatus === 'Purchased' ? 'selected' : ''; ?>>Purchased</option>
+                                        <option value="Delivered to Port of Load" <?php echo $selectedStatus === 'Delivered to Port of Load' ? 'selected' : ''; ?>>Delivered to Port of Load</option>
+                                        <option value="Origin customs clearance" <?php echo $selectedStatus === 'Origin customs clearance' ? 'selected' : ''; ?>>Origin customs clearance</option>
                                         <option value="Shipping" <?php echo $selectedStatus === 'Shipping' ? 'selected' : ''; ?>>Shipping</option>
-                                        <option value="Customs" <?php echo $selectedStatus === 'Customs' ? 'selected' : ''; ?>>Customs</option>
+                                        <option value="Arrived in Ghana" <?php echo $selectedStatus === 'Arrived in Ghana' ? 'selected' : ''; ?>>Arrived in Ghana</option>
+                                        <option value="Ghana Customs Clearance" <?php echo $selectedStatus === 'Ghana Customs Clearance' ? 'selected' : ''; ?>>Ghana Customs Clearance</option>
                                         <option value="Inspection" <?php echo $selectedStatus === 'Inspection' ? 'selected' : ''; ?>>Inspection</option>
                                         <option value="Repair" <?php echo $selectedStatus === 'Repair' ? 'selected' : ''; ?>>Repair</option>
                                         <option value="Ready" <?php echo $selectedStatus === 'Ready' ? 'selected' : ''; ?>>Ready</option>

@@ -43,7 +43,7 @@
 
                 <!-- Progress Bar -->
                 <?php
-                $statuses = ['Pending', 'Purchased', 'Shipping', 'Customs', 'Inspection', 'Repair', 'Ready', 'Delivered'];
+                $statuses = ['Pending', 'Purchased', 'Delivered to Port of Load', 'Origin customs clearance', 'Shipping', 'Arrived in Ghana', 'Ghana Customs Clearance', 'Inspection', 'Repair', 'Ready', 'Delivered'];
                 $currentIndex = array_search($order['status'], $statuses);
                 $progress = ($currentIndex !== false) ? ($currentIndex / (count($statuses) - 1)) * 100 : 0;
                 

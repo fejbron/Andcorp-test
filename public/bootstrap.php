@@ -243,22 +243,29 @@ function formatDateTime($datetime) {
 }
 
 function getStatusBadgeClass($status) {
+    // Normalize status for comparison (case-insensitive)
+    $statusLower = strtolower($status);
+    
     $classes = [
         'pending' => 'warning',
         'purchased' => 'info',
+        'delivered to port of load' => 'primary',
+        'origin customs clearance' => 'secondary',
         'shipping' => 'primary',
-        'customs' => 'secondary',
+        'arrived in ghana' => 'info',
+        'ghana customs clearance' => 'secondary',
         'inspection' => 'info',
         'repair' => 'warning',
         'ready' => 'success',
         'delivered' => 'success',
         'cancelled' => 'danger'
     ];
-    return $classes[$status] ?? 'secondary';
+    return $classes[$statusLower] ?? 'secondary';
 }
 
 function getStatusLabel($status) {
-    return ucwords(str_replace('_', ' ', $status));
+    // Return the status as-is since it's already properly formatted in the database
+    return $status;
 }
 
 function uploadFile($file, $directory = 'uploads/') {

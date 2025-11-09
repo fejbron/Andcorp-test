@@ -50,11 +50,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             }
             
             // Calculate total USD from cost breakdown (including vehicle purchase price)
-            $carCost = Security::sanitizeFloat($_POST['car_cost'] ?? 0, 0);
-            $transportationCost = Security::sanitizeFloat($_POST['transportation_cost'] ?? 0, 0);
-            $dutyCost = Security::sanitizeFloat($_POST['duty_cost'] ?? 0, 0);
-            $clearingCost = Security::sanitizeFloat($_POST['clearing_cost'] ?? 0, 0);
-            $fixingCost = Security::sanitizeFloat($_POST['fixing_cost'] ?? 0, 0);
+            // Use existing order values as fallback to prevent overriding with 0
+            $carCost = Security::sanitizeFloat($_POST['car_cost'] ?? $order['car_cost'] ?? 0, 0);
+            $transportationCost = Security::sanitizeFloat($_POST['transportation_cost'] ?? $order['transportation_cost'] ?? 0, 0);
+            $dutyCost = Security::sanitizeFloat($_POST['duty_cost'] ?? $order['duty_cost'] ?? 0, 0);
+            $clearingCost = Security::sanitizeFloat($_POST['clearing_cost'] ?? $order['clearing_cost'] ?? 0, 0);
+            $fixingCost = Security::sanitizeFloat($_POST['fixing_cost'] ?? $order['fixing_cost'] ?? 0, 0);
             $totalUsd = $vehiclePurchasePrice + $carCost + $transportationCost + $dutyCost + $clearingCost + $fixingCost;
             
             // Get current total_deposits (sum of all verified deposits)
@@ -190,15 +191,18 @@ $vehicle = $vehicleModel->findByOrderId($orderId);
                                     <div class="mb-3">
                                         <label for="status" class="form-label">Order Status *</label>
                                         <select class="form-select" id="status" name="status" required>
-                                            <option value="pending" <?php echo $order['status'] === 'pending' ? 'selected' : ''; ?>>Pending</option>
-                                            <option value="purchased" <?php echo $order['status'] === 'purchased' ? 'selected' : ''; ?>>Purchased</option>
-                                            <option value="shipping" <?php echo $order['status'] === 'shipping' ? 'selected' : ''; ?>>Shipping</option>
-                                            <option value="customs" <?php echo $order['status'] === 'customs' ? 'selected' : ''; ?>>Customs</option>
-                                            <option value="inspection" <?php echo $order['status'] === 'inspection' ? 'selected' : ''; ?>>Inspection</option>
-                                            <option value="repair" <?php echo $order['status'] === 'repair' ? 'selected' : ''; ?>>Repair</option>
-                                            <option value="ready" <?php echo $order['status'] === 'ready' ? 'selected' : ''; ?>>Ready</option>
-                                            <option value="delivered" <?php echo $order['status'] === 'delivered' ? 'selected' : ''; ?>>Delivered</option>
-                                            <option value="cancelled" <?php echo $order['status'] === 'cancelled' ? 'selected' : ''; ?>>Cancelled</option>
+                                            <option value="Pending" <?php echo $order['status'] === 'Pending' ? 'selected' : ''; ?>>Pending</option>
+                                            <option value="Purchased" <?php echo $order['status'] === 'Purchased' ? 'selected' : ''; ?>>Purchased</option>
+                                            <option value="Delivered to Port of Load" <?php echo $order['status'] === 'Delivered to Port of Load' ? 'selected' : ''; ?>>Delivered to Port of Load</option>
+                                            <option value="Origin customs clearance" <?php echo $order['status'] === 'Origin customs clearance' ? 'selected' : ''; ?>>Origin customs clearance</option>
+                                            <option value="Shipping" <?php echo $order['status'] === 'Shipping' ? 'selected' : ''; ?>>Shipping</option>
+                                            <option value="Arrived in Ghana" <?php echo $order['status'] === 'Arrived in Ghana' ? 'selected' : ''; ?>>Arrived in Ghana</option>
+                                            <option value="Ghana Customs Clearance" <?php echo $order['status'] === 'Ghana Customs Clearance' ? 'selected' : ''; ?>>Ghana Customs Clearance</option>
+                                            <option value="Inspection" <?php echo $order['status'] === 'Inspection' ? 'selected' : ''; ?>>Inspection</option>
+                                            <option value="Repair" <?php echo $order['status'] === 'Repair' ? 'selected' : ''; ?>>Repair</option>
+                                            <option value="Ready" <?php echo $order['status'] === 'Ready' ? 'selected' : ''; ?>>Ready</option>
+                                            <option value="Delivered" <?php echo $order['status'] === 'Delivered' ? 'selected' : ''; ?>>Delivered</option>
+                                            <option value="Cancelled" <?php echo $order['status'] === 'Cancelled' ? 'selected' : ''; ?>>Cancelled</option>
                                         </select>
                                         <div class="form-text">Changing status will send notification to customer</div>
                                     </div>

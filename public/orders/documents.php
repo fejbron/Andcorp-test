@@ -47,93 +47,152 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST' && isset($_FILES['document']) && $canU
             if (!in_array($documentType, $allowedDocTypes, true)) {
                 $_SESSION['error'] = 'Invalid document type selected';
             } else {
-                $file = $_FILES['document'];
+                // Handle multiple file uploads
+                $files = $_FILES['document'];
+                $uploadedCount = 0;
+                $failedCount = 0;
+                $errors = [];
                 
-                // Validate file - validateFileUpload expects (file, allowedTypes array, maxSize)
+                // Check if multiple files were uploaded
+                $fileCount = is_array($files['name']) ? count($files['name']) : 1;
+                
+                // Normalize the files array structure for consistent processing
+                if (!is_array($files['name'])) {
+                    // Single file upload - convert to array format
+                    $files = [
+                        'name' => [$files['name']],
+                        'type' => [$files['type']],
+                        'tmp_name' => [$files['tmp_name']],
+                        'error' => [$files['error']],
+                        'size' => [$files['size']]
+                    ];
+                }
+                
                 $allowedMimeTypes = ['image/jpeg', 'image/jpg', 'image/png', 'application/pdf'];
                 $maxSize = 10 * 1024 * 1024; // 10MB
-                $validation = Security::validateFileUpload($file, $allowedMimeTypes, $maxSize);
                 
-                if ($validation['valid']) {
-                    $uploadDir = __DIR__ . '/../uploads/' . ($documentType === 'car_image' ? 'cars' : 'documents');
-                    
-                    // Create directory if it doesn't exist
-                    if (!is_dir($uploadDir)) {
-                        if (!mkdir($uploadDir, 0755, true)) {
-                            $_SESSION['error'] = 'Failed to create upload directory. Please contact administrator.';
-                            redirect(url('orders/documents.php?id=' . $orderId));
-                            exit;
-                        }
+                // Process each file
+                for ($i = 0; $i < $fileCount; $i++) {
+                    // Skip if no file was uploaded
+                    if ($files['error'][$i] === UPLOAD_ERR_NO_FILE) {
+                        continue;
                     }
                     
-                    // Generate secure filename
-                    $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
-                    $secureFilename = bin2hex(random_bytes(16)) . '.' . $extension;
-                    $uploadPath = $uploadDir . '/' . $secureFilename;
-                    $relativePath = 'uploads/' . ($documentType === 'car_image' ? 'cars' : 'documents') . '/' . $secureFilename;
+                    // Create file array for validation
+                    $file = [
+                        'name' => $files['name'][$i],
+                        'type' => $files['type'][$i],
+                        'tmp_name' => $files['tmp_name'][$i],
+                        'error' => $files['error'][$i],
+                        'size' => $files['size'][$i]
+                    ];
                     
-                    if (move_uploaded_file($file['tmp_name'], $uploadPath)) {
-                        // Set proper file permissions
-                        @chmod($uploadPath, 0644);
+                    // Validate file
+                    $validation = Security::validateFileUpload($file, $allowedMimeTypes, $maxSize);
+                    
+                    if ($validation['valid']) {
+                        $uploadDir = __DIR__ . '/../uploads/' . ($documentType === 'car_image' ? 'cars' : 'documents');
                         
-                        try {
-                            // Save to database
-                            $stmt = $db->prepare("
-                                INSERT INTO order_documents 
-                                (order_id, document_type, file_name, file_path, file_size, uploaded_by)
-                                VALUES (?, ?, ?, ?, ?, ?)
-                            ");
+                        // Create directory if it doesn't exist
+                        if (!is_dir($uploadDir)) {
+                            if (!mkdir($uploadDir, 0755, true)) {
+                                $errors[] = $file['name'] . ': Failed to create upload directory';
+                                $failedCount++;
+                                continue;
+                            }
+                        }
+                        
+                        // Generate secure filename
+                        $extension = strtolower(pathinfo($file['name'], PATHINFO_EXTENSION));
+                        $secureFilename = bin2hex(random_bytes(16)) . '.' . $extension;
+                        $uploadPath = $uploadDir . '/' . $secureFilename;
+                        $relativePath = 'uploads/' . ($documentType === 'car_image' ? 'cars' : 'documents') . '/' . $secureFilename;
+                        
+                        if (move_uploaded_file($file['tmp_name'], $uploadPath)) {
+                            // Set proper file permissions
+                            @chmod($uploadPath, 0644);
                             
-                            $stmt->execute([
-                                $orderId,
-                                $documentType,
-                                Security::sanitizeString($file['name'], 255),
-                                Security::sanitizeString($relativePath, 500),
-                                (int)$file['size'],
-                                $user['id']
-                            ]);
-                            
-                            $_SESSION['success'] = 'Document uploaded successfully!';
-                            
-                            // Log activity
                             try {
-                                Auth::logOrderActivity($user['id'], $orderId, 'document_uploaded', 
-                                    "Uploaded {$documentType} document");
+                                // Save to database
+                                $stmt = $db->prepare("
+                                    INSERT INTO order_documents 
+                                    (order_id, document_type, file_name, file_path, file_size, uploaded_by)
+                                    VALUES (?, ?, ?, ?, ?, ?)
+                                ");
+                                
+                                $stmt->execute([
+                                    $orderId,
+                                    $documentType,
+                                    Security::sanitizeString($file['name'], 255),
+                                    Security::sanitizeString($relativePath, 500),
+                                    (int)$file['size'],
+                                    $user['id']
+                                ]);
+                                
+                                $uploadedCount++;
+                                
+                                // Log activity for first file only to avoid spam
+                                if ($i === 0) {
+                                    try {
+                                        $logMessage = $fileCount > 1 
+                                            ? "Uploaded {$fileCount} {$documentType} document(s)"
+                                            : "Uploaded {$documentType} document";
+                                        Auth::logOrderActivity($user['id'], $orderId, 'document_uploaded', $logMessage);
+                                    } catch (Exception $e) {
+                                        error_log("Failed to log document upload: " . $e->getMessage());
+                                    }
+                                }
+                            } catch (PDOException $e) {
+                                // Delete uploaded file if database insert fails
+                                @unlink($uploadPath);
+                                
+                                // Check if it's an ENUM value error
+                                $errorCode = $e->getCode();
+                                $errorMessage = $e->getMessage();
+                                if (strpos($errorMessage, 'document_type') !== false || 
+                                    strpos($errorMessage, 'Data truncated') !== false ||
+                                    strpos($errorMessage, '1265') !== false ||
+                                    $errorCode == '1265' ||
+                                    (is_string($errorCode) && strpos($errorCode, '1265') !== false)) {
+                                    $errors[] = 'The document type "Evidence of Delivery" is not yet enabled in the database';
+                                    error_log("Document type ENUM error for 'evidence_of_delivery': " . $errorMessage . " (Code: " . $errorCode . ")");
+                                } else {
+                                    $errors[] = $file['name'] . ': Database error';
+                                    error_log("Database error saving document: " . $errorMessage . " (Code: " . $errorCode . ")");
+                                }
+                                $failedCount++;
                             } catch (Exception $e) {
-                                // Don't fail if logging fails
-                                error_log("Failed to log document upload: " . $e->getMessage());
+                                @unlink($uploadPath);
+                                $errors[] = $file['name'] . ': ' . $e->getMessage();
+                                error_log("Error uploading document: " . $e->getMessage());
+                                $failedCount++;
                             }
-                            
-                            redirect(url('orders/documents.php?id=' . $orderId));
-                        } catch (PDOException $e) {
-                            // Delete uploaded file if database insert fails
-                            @unlink($uploadPath);
-                            
-                            // Check if it's an ENUM value error
-                            $errorCode = $e->getCode();
-                            $errorMessage = $e->getMessage();
-                            if (strpos($errorMessage, 'document_type') !== false || 
-                                strpos($errorMessage, 'Data truncated') !== false ||
-                                strpos($errorMessage, '1265') !== false ||
-                                $errorCode == '1265' ||
-                                (is_string($errorCode) && strpos($errorCode, '1265') !== false)) {
-                                $_SESSION['error'] = 'The document type "Evidence of Delivery" is not yet enabled in the database. Please contact the administrator to run the database migration.';
-                                error_log("Document type ENUM error for 'evidence_of_delivery': " . $errorMessage . " (Code: " . $errorCode . ")");
-                            } else {
-                                $_SESSION['error'] = 'Failed to save document to database. Please try again or contact support.';
-                                error_log("Database error saving document: " . $errorMessage . " (Code: " . $errorCode . ")");
-                            }
-                        } catch (Exception $e) {
-                            // Delete uploaded file if database insert fails
-                            @unlink($uploadPath);
-                            $_SESSION['error'] = 'An error occurred: ' . $e->getMessage();
-                            error_log("Error uploading document: " . $e->getMessage());
+                        } else {
+                            $errors[] = $file['name'] . ': Failed to move uploaded file';
+                            $failedCount++;
                         }
                     } else {
-                        $_SESSION['error'] = 'Failed to upload file. Please try again.';
+                        $errors[] = $file['name'] . ': ' . ($validation['error'] ?? 'File validation failed');
+                        $failedCount++;
                     }
+                }
+                
+                // Set success/error messages
+                if ($uploadedCount > 0 && $failedCount === 0) {
+                    $_SESSION['success'] = $uploadedCount === 1 
+                        ? 'Document uploaded successfully!' 
+                        : "{$uploadedCount} documents uploaded successfully!";
+                    redirect(url('orders/documents.php?id=' . $orderId));
+                } elseif ($uploadedCount > 0 && $failedCount > 0) {
+                    $_SESSION['success'] = "{$uploadedCount} document(s) uploaded successfully. {$failedCount} failed.";
+                    if (!empty($errors)) {
+                        $_SESSION['error'] = 'Some files failed: ' . implode(', ', array_slice($errors, 0, 3));
+                    }
+                    redirect(url('orders/documents.php?id=' . $orderId));
                 } else {
-                    $_SESSION['error'] = $validation['error'] ?? 'File validation failed';
+                    $_SESSION['error'] = !empty($errors) 
+                        ? implode(', ', array_slice($errors, 0, 3))
+                        : 'All uploads failed. Please try again.';
                 }
             }
         }
@@ -460,8 +519,8 @@ $title = "Order Documents - " . $order['order_number'];
                             
                             <div class="col-md-6 mb-3">
                                 <label class="form-label">File *</label>
-                                <input type="file" name="document" class="form-control" accept="image/*,.pdf" required>
-                                <small class="text-muted">Max 10MB. Accepted: JPG, PNG, PDF</small>
+                                <input type="file" name="document[]" class="form-control" accept="image/*,.pdf" multiple required>
+                                <small class="text-muted">Max 10MB per file. Accepted: JPG, PNG, PDF. You can select multiple files.</small>
                             </div>
                         </div>
                         

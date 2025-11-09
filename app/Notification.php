@@ -73,8 +73,11 @@ class Notification {
         $statusMessages = [
             'pending' => 'Your order has been created and is pending processing.',
             'purchased' => 'Your vehicle has been successfully purchased from the auction!',
+            'delivered to port of load' => 'Your vehicle has been delivered to the port of loading and is being prepared for shipping.',
+            'origin customs clearance' => 'Your vehicle is going through export customs clearance at the origin country.',
             'shipping' => 'Your vehicle is now being shipped to Ghana.',
-            'customs' => 'Your vehicle has arrived and is going through customs clearance.',
+            'arrived in ghana' => 'Great news! Your vehicle has arrived safely in Ghana.',
+            'ghana customs clearance' => 'Your vehicle is going through customs clearance in Ghana.',
             'inspection' => 'Your vehicle is currently being inspected.',
             'repair' => 'Your vehicle is in the shop for repairs and improvements.',
             'ready' => 'Great news! Your vehicle is ready for delivery.',

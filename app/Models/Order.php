@@ -30,7 +30,7 @@ class Order {
         }
         
         // Fallback to expected values (capitalized to match database)
-        self::$validStatuses = ['Pending', 'Purchased', 'Shipping', 'Customs', 'Inspection', 'Repair', 'Ready', 'Delivered', 'Cancelled'];
+        self::$validStatuses = ['Pending', 'Purchased', 'Delivered to Port of Load', 'Origin customs clearance', 'Shipping', 'Arrived in Ghana', 'Ghana Customs Clearance', 'Inspection', 'Repair', 'Ready', 'Delivered', 'Cancelled'];
         return self::$validStatuses;
     }
     
