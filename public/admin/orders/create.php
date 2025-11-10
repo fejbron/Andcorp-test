@@ -37,6 +37,32 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
             $db = Database::getInstance()->getConnection();
             $db->beginTransaction();
             
+            // Calculate costs with discount
+            $purchasePrice = Security::sanitizeFloat($_POST['purchase_price'] ?? 0, 0);
+            $subtotal = $purchasePrice; // Initial subtotal from purchase price
+            
+            // Handle discount
+            $discountType = Security::sanitizeString($_POST['discount_type'] ?? 'none', 20);
+            $discountValue = Security::sanitizeFloat($_POST['discount_value'] ?? 0, 0);
+            
+            // Validate discount type
+            if (!in_array($discountType, ['none', 'fixed', 'percentage'])) {
+                $discountType = 'none';
+            }
+            
+            // Calculate discount amount and total cost
+            $discountAmount = 0;
+            if ($discountType === 'fixed') {
+                $discountAmount = min($discountValue, $subtotal);
+            } elseif ($discountType === 'percentage') {
+                $discountValue = min(max($discountValue, 0), 100);
+                $discountAmount = ($subtotal * $discountValue) / 100;
+            }
+            
+            $totalCost = max(0, $subtotal - $discountAmount);
+            $depositAmount = Security::sanitizeFloat($_POST['deposit_amount'] ?? 0, 0);
+            $balanceDue = $totalCost - $depositAmount;
+            
             // Create order
             $orderModel = new Order();
             $orderNumber = $orderModel->generateOrderNumber();
@@ -45,9 +71,12 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                 'customer_id' => Security::sanitizeInt($_POST['customer_id']),
                 'order_number' => $orderNumber,
                 'status' => Security::sanitizeStatus($_POST['status'] ?? 'Pending'),
-                'total_cost' => Security::sanitizeFloat($_POST['total_cost'] ?? 0, 0),
-                'deposit_amount' => Security::sanitizeFloat($_POST['deposit_amount'] ?? 0, 0),
-                'balance_due' => (Security::sanitizeFloat($_POST['total_cost'] ?? 0, 0)) - (Security::sanitizeFloat($_POST['deposit_amount'] ?? 0, 0)),
+                'subtotal' => $subtotal,
+                'discount_type' => $discountType,
+                'discount_value' => $discountValue,
+                'total_cost' => $totalCost,
+                'deposit_amount' => $depositAmount,
+                'balance_due' => $balanceDue,
                 'currency' => 'GHS', // Ghana Cedis only
                 'notes' => !empty($_POST['notes']) ? Security::sanitizeString($_POST['notes'], 5000) : null
             ]);
@@ -318,26 +347,58 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
                                 </div>
                             </div>
 
+                            <!-- Discount Section -->
+                            <h6 class="mt-3 mb-3">Discount (Optional)</h6>
                             <div class="row">
-                                <div class="col-md-4 mb-3">
-                                    <label for="total_cost" class="form-label">Total Cost</label>
-                                    <input type="number" step="0.01" class="form-control" id="total_cost" name="total_cost" 
-                                           value="<?php echo old('total_cost', 0); ?>">
+                                <div class="col-md-6 mb-3">
+                                    <label for="discount_type" class="form-label">Discount Type</label>
+                                    <select class="form-select" id="discount_type" name="discount_type">
+                                        <option value="none" <?php echo old('discount_type', 'none') === 'none' ? 'selected' : ''; ?>>No Discount</option>
+                                        <option value="fixed" <?php echo old('discount_type') === 'fixed' ? 'selected' : ''; ?>>Fixed Amount (GHS)</option>
+                                        <option value="percentage" <?php echo old('discount_type') === 'percentage' ? 'selected' : ''; ?>>Percentage (%)</option>
+                                    </select>
                                 </div>
 
-                                <div class="col-md-4 mb-3">
-                                    <label for="deposit_amount" class="form-label">Deposit Amount</label>
+                                <div class="col-md-6 mb-3">
+                                    <label for="discount_value" class="form-label">Discount Value</label>
+                                    <input type="number" step="0.01" class="form-control" id="discount_value" name="discount_value" 
+                                           value="<?php echo old('discount_value', 0); ?>" min="0" placeholder="0.00">
+                                    <small class="form-text text-muted" id="discount_help">Enter discount amount or percentage</small>
+                                </div>
+                            </div>
+
+                            <!-- Cost Summary -->
+                            <div class="alert alert-light border mb-3">
+                                <table class="table table-sm mb-0">
+                                    <tr>
+                                        <td><strong>Subtotal:</strong></td>
+                                        <td class="text-end">GHS <span id="subtotal_display">0.00</span></td>
+                                    </tr>
+                                    <tr id="discount_row" style="display:none;">
+                                        <td><strong>Discount:</strong></td>
+                                        <td class="text-end text-danger">- GHS <span id="discount_display">0.00</span></td>
+                                    </tr>
+                                    <tr class="table-primary">
+                                        <td><strong><i class="bi bi-calculator"></i> Total Cost:</strong></td>
+                                        <td class="text-end"><strong>GHS <span id="total_cost_display">0.00</span></strong></td>
+                                    </tr>
+                                </table>
+                                <input type="hidden" id="total_cost" name="total_cost" value="0">
+                            </div>
+
+                            <div class="row">
+                                <div class="col-md-6 mb-3">
+                                    <label for="deposit_amount" class="form-label">Initial Deposit Amount</label>
                                     <input type="number" step="0.01" class="form-control" id="deposit_amount" name="deposit_amount" 
                                            value="<?php echo old('deposit_amount', 0); ?>">
+                                    <small class="form-text text-muted">Optional: Initial deposit amount</small>
                                 </div>
 
-                                <div class="col-md-4 mb-3">
+                                <div class="col-md-6 mb-3">
                                     <label for="currency" class="form-label">Currency</label>
-                                    <select class="form-select" id="currency" name="currency">
-                                        <option value="USD" <?php echo old('currency', 'USD') === 'USD' ? 'selected' : ''; ?>>USD</option>
-                                        <option value="GHS" <?php echo old('currency') === 'GHS' ? 'selected' : ''; ?>>GHS</option>
-                                        <option value="EUR" <?php echo old('currency') === 'EUR' ? 'selected' : ''; ?>>EUR</option>
-                                    </select>
+                                    <input type="text" class="form-control" value="GHS (Ghana Cedis)" readonly>
+                                    <input type="hidden" name="currency" value="GHS">
+                                    <small class="form-text text-muted">All transactions in GHS</small>
                                 </div>
                             </div>
 
@@ -362,6 +423,74 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     </div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Real-time discount calculation for order creation
+        function calculateOrderTotal() {
+            // Get purchase price (subtotal)
+            const purchasePrice = parseFloat(document.getElementById('purchase_price').value) || 0;
+            const subtotal = purchasePrice;
+            
+            // Get discount details
+            const discountType = document.getElementById('discount_type').value;
+            const discountValue = parseFloat(document.getElementById('discount_value').value) || 0;
+            
+            // Calculate discount amount
+            let discountAmount = 0;
+            if (discountType === 'fixed') {
+                discountAmount = Math.min(discountValue, subtotal);
+            } else if (discountType === 'percentage') {
+                const percentage = Math.min(Math.max(discountValue, 0), 100);
+                discountAmount = (subtotal * percentage) / 100;
+            }
+            
+            // Calculate final total
+            const totalCost = Math.max(0, subtotal - discountAmount);
+            
+            // Update displays
+            document.getElementById('subtotal_display').textContent = subtotal.toFixed(2);
+            document.getElementById('discount_display').textContent = discountAmount.toFixed(2);
+            document.getElementById('total_cost_display').textContent = totalCost.toFixed(2);
+            document.getElementById('total_cost').value = totalCost.toFixed(2);
+            
+            // Show/hide discount row
+            const discountRow = document.getElementById('discount_row');
+            if (discountType === 'none' || discountAmount === 0) {
+                discountRow.style.display = 'none';
+            } else {
+                discountRow.style.display = '';
+            }
+        }
+        
+        // Update discount help text based on type
+        function updateDiscountHelp() {
+            const discountType = document.getElementById('discount_type').value;
+            const helpText = document.getElementById('discount_help');
+            const discountValueInput = document.getElementById('discount_value');
+            
+            if (discountType === 'percentage') {
+                helpText.textContent = 'Enter percentage (0-100)';
+                discountValueInput.setAttribute('max', '100');
+            } else if (discountType === 'fixed') {
+                helpText.textContent = 'Enter amount in GHS';
+                discountValueInput.removeAttribute('max');
+            } else {
+                helpText.textContent = 'No discount applied';
+                discountValueInput.value = '0';
+            }
+            
+            calculateOrderTotal();
+        }
+        
+        // Attach event listeners
+        document.getElementById('purchase_price').addEventListener('input', calculateOrderTotal);
+        document.getElementById('purchase_price').addEventListener('change', calculateOrderTotal);
+        document.getElementById('discount_type').addEventListener('change', updateDiscountHelp);
+        document.getElementById('discount_value').addEventListener('input', calculateOrderTotal);
+        document.getElementById('discount_value').addEventListener('change', calculateOrderTotal);
+        
+        // Calculate on page load
+        calculateOrderTotal();
+    </script>
 </body>
 </html>
 <?php clearErrors(); clearOld(); ?>

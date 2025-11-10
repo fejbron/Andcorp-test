@@ -49,7 +49,8 @@ mysql -u username -p database_name < database/add_discount_feature_2025.sql
 - ✅ `database/add_discount_feature_2025.sql` - Migration file for existing installations
 
 ### 2. Order Management
-- ✅ `public/admin/orders/edit.php` - Added discount UI and calculation logic
+- ✅ `public/admin/orders/create.php` - Added discount UI during order creation
+- ✅ `public/admin/orders/edit.php` - Added discount UI and calculation logic for editing
 - ✅ `public/orders/view.php` - Display discount in customer view
 
 ### 3. Backend Logic
@@ -60,6 +61,33 @@ mysql -u username -p database_name < database/add_discount_feature_2025.sql
 ## Usage
 
 ### Applying a Discount (Admin)
+
+**Option 1: During Order Creation**
+
+1. **Navigate to Create Order Page**
+   - Go to Admin Dashboard → Orders → Create New Order
+
+2. **Fill Order Details**
+   - Enter customer information, vehicle details, and purchase price
+
+3. **Scroll to Discount Section**
+   - Located in the "Purchase & Financial Information" section
+
+4. **Select Discount Type**
+   - Choose from: No Discount, Fixed Amount, or Percentage
+
+5. **Enter Discount Value**
+   - For Fixed: Enter amount in GHS (e.g., 500.00)
+   - For Percentage: Enter percentage (e.g., 10 for 10% off)
+
+6. **Review Calculation**
+   - Subtotal, discount amount, and final total are displayed in real-time
+   - Verify the amounts before saving
+
+7. **Create Order**
+   - Click "Create Order" to save with discount applied
+
+**Option 2: Edit Existing Order**
 
 1. **Navigate to Order Edit Page**
    - Go to Admin Dashboard → Orders → Edit Order
@@ -223,18 +251,38 @@ Balance Due:        GHS  3,500.00
 
 After deployment, verify:
 
+**Order Creation:**
 - [ ] Create new order without discount
-- [ ] Apply fixed discount to order
-- [ ] Apply percentage discount to order
+- [ ] Create new order with fixed discount
+- [ ] Create new order with percentage discount
+- [ ] Verify real-time calculation during order creation
+- [ ] Verify discount is saved with new order
+
+**Order Editing:**
+- [ ] Edit existing order and add fixed discount
+- [ ] Edit existing order and add percentage discount
 - [ ] Change discount from fixed to percentage
 - [ ] Remove discount (set to "No Discount")
-- [ ] Verify subtotal exceeds discount (validation)
+- [ ] Verify discount persists after editing
+
+**Validation:**
+- [ ] Verify fixed discount cannot exceed subtotal
 - [ ] Verify percentage stays within 0-100
-- [ ] Check financial summary displays correctly
-- [ ] Verify customer view shows discount
-- [ ] Confirm existing orders still work
+- [ ] Test negative values are rejected
+- [ ] Test edge cases (0%, 100%, etc.)
+
+**Display & Calculation:**
+- [ ] Check financial summary displays correctly on edit page
+- [ ] Check financial summary displays correctly on customer view
+- [ ] Verify customer view shows discount with correct type
+- [ ] Verify discount shows in sidebar on edit page
 - [ ] Test balance_due calculation with discount
 - [ ] Verify deposits still update correctly
+
+**Backward Compatibility:**
+- [ ] Confirm existing orders (without discount) still work
+- [ ] Verify migration sets correct defaults for old orders
+- [ ] Test that old orders can be edited and discount can be added
 
 ## API/Integration Notes
 
